@@ -1,0 +1,57 @@
+# Релей с прямым HTTPS — для сервера с белым IP.
+#
+# Вместо туннеля Cloudflare здесь Caddy: обычный TLS на 443 с сертификатом
+# Let's Encrypt. Движущихся частей меньше, и снаружи это неотличимо от любого
+# другого сайта — в отличие от протокола туннеля, который в некоторых сетях
+# распознают и режут.
+#
+#   A-запись relay.ваш-домен -> IP сервера (серое облако, без проксирования!)
+#   cd deploy && cp .env.example .env    # заполнить RELAY_DOMAIN и ACME_EMAIL
+#   docker compose -f docker-compose.direct.yml up -d
+
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: meteor-relay
+    container_name: meteor-relay
+    restart: unless-stopped
+    environment:
+      RELAY_PUBLIC_URL: https://${RELAY_DOMAIN:?set RELAY_DOMAIN in .env}
+      KICK_CLIENT_ID: ${KICK_CLIENT_ID:?set KICK_CLIENT_ID in .env}
+      KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:?set KICK_CLIENT_SECRET in .env}
+      RELAY_STATE_FILE: /data/relay-state.json
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - relay-data:/data
+    networks: [meteor]
+    # Наружу не публикуется: до него ходит только Caddy внутри сети compose.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: meteor-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"      # нужен Let's Encrypt для проверки домена
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?set RELAY_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # сертификаты: без тома их придётся выпускать заново
+      - caddy-config:/config
+    depends_on:
+      relay:
+        condition: service_healthy
+    networks: [meteor]
+
+volumes:
+  relay-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  meteor:

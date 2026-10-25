@@ -1,0 +1,26 @@
+# Автоматический HTTPS для релея. Caddy сам получает и продлевает сертификат
+# Let's Encrypt — ничего, кроме домена и открытых 80/443, не требуется.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$RELAY_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy relay:8088 {
+		# Агенты держат постоянный SSE-поток. Без отключённой буферизации Caddy
+		# будет копить события и отдавать их пачками — игра начнёт отставать.
+		flush_interval -1
+
+		# Долгий поток не должен обрываться по таймауту чтения.
+		transport http {
+			read_timeout 0
+		}
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

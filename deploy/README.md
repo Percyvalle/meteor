@@ -2,39 +2,67 @@
 
 Здесь только релей. Локальный хост стримера в Docker не кладём: он отдаёт оверлей в OBS на той же машине, и требовать от стримера Docker Desktop — верный способ растерять пользователей.
 
+## Два варианта
+
+| | Когда | Что поднимается |
+|---|---|---|
+| **A. Прямой HTTPS** `docker-compose.direct.yml` | есть белый IP | релей + Caddy с Let's Encrypt |
+| **B. Туннель** `docker-compose.yml` | белого IP нет | релей + cloudflared |
+
+**Вариант A предпочтительнее на сервере.** Снаружи это обычный TLS на 443, неотличимый от любого сайта. Протокол туннеля в некоторых сетях распознают по сигнатуре и обрывают соединения — проявляется как постоянные реконнекты и ошибка 1033, причём MTU и потери пакетов при этом в норме.
+
+Вариант B остаётся для машины без белого IP, например домашнего ПК.
+
 ## Подготовка VPS
 
 Чистая Ubuntu 24.04:
 
 ```bash
-sudo bash setup-vps.sh
+sudo bash setup-vps.sh --open-web     # вариант A, откроет 80 и 443
+sudo bash setup-vps.sh                # вариант B, наружу только SSH
 ```
 
-Ставит Docker, закрывает файрволом всё кроме SSH, включает автообновления безопасности и fail2ban. Больше ничего не нужно: Node живёт в контейнере, TLS терминирует Cloudflare, базы нет. Скрипт можно запускать повторно.
+Ставит Docker, настраивает файрвол, включает автообновления безопасности и fail2ban. Больше ничего не нужно: Node живёт в контейнере, базы нет. Скрипт можно запускать повторно.
 
-## Быстрый старт
+## Вариант A — прямой HTTPS
+
+A-запись `relay.example.com` → IP сервера. **Проксирование Cloudflare выключить** (серое облако): иначе он встанет перед Caddy и помешает выпуску сертификата.
 
 ```bash
 cd deploy
-cp .env.example .env     # заполнить
+cp .env.example .env     # RELAY_DOMAIN, ACME_EMAIL, KICK_CLIENT_ID, KICK_CLIENT_SECRET
+docker compose -f docker-compose.direct.yml up -d
+```
+
+Caddy получит сертификат автоматически при первом обращении — обычно несколько секунд. Он лежит в томе `caddy-data`: удалите том, и сертификат будет выпускаться заново, а у Let's Encrypt есть ограничения на частоту.
+
+В `Caddyfile` важны две настройки, не убирайте их: `flush_interval -1` и `read_timeout 0`. Агенты держат постоянный SSE-поток, и без них прокси начнёт копить события и отдавать пачками.
+
+## Вариант B — туннель
+
+```bash
+cd deploy
+cp .env.example .env     # RELAY_PUBLIC_URL, CLOUDFLARE_TUNNEL_TOKEN, KICK_*
 docker compose up -d
 ```
 
-Поднимется два контейнера: релей и туннель Cloudflare к нему. Наружу **не открыт ни один порт** — Cloudflare достаёт до релея через исходящее соединение туннеля, сертификатами заниматься не нужно.
+Наружу **не открыт ни один порт** — Cloudflare достаёт до релея через исходящее соединение туннеля, сертификатами заниматься не нужно.
+
+В туннеле Cloudflare добавьте маршрут (Networks → Tunnels → ваш туннель → Routes → Add route → Published application):
+
+```
+Subdomain: relay      Domain: ваш домен
+Service URL: http://relay:8088
+```
+
+`relay:8088` — имя сервиса из compose; `localhost` там указывает сам на себя.
+
+## Общее
 
 ```bash
 docker compose logs -f relay     # что происходит
 docker compose ps                # healthcheck
-docker compose pull && docker compose up -d   # обновиться
 ```
-
-## Что заполнить в `.env`
-
-| Переменная | Откуда |
-|---|---|
-| `RELAY_PUBLIC_URL` | ваш постоянный домен, например `https://relay.example.com` |
-| `KICK_CLIENT_ID` / `KICK_CLIENT_SECRET` | приложение на [kick.com/settings/developer](https://kick.com/settings/developer) — **одно на всех стримеров** |
-| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Zero Trust → Networks → Tunnels → Create a tunnel → Docker |
 
 В приложении Kick прописывается один раз:
 
@@ -42,8 +70,6 @@ docker compose pull && docker compose up -d   # обновиться
 - **Redirect URI** — `https://relay.example.com/auth/kick/callback`
 - Разрешения: чтение пользователя и канала, запись в чат, подписка на события. Без `events:subscribe` Kick отвечает голым 401 на создание подписки.
 - Нажмите «Создать бота для этого приложения», если бот должен писать в чат от своего имени.
-
-В туннеле Cloudflare задайте Public Hostname: `relay.example.com` → `http://relay:8088` (имя сервиса из compose, не `localhost`).
 
 ## Данные
 
@@ -53,10 +79,6 @@ docker compose pull && docker compose up -d   # обновиться
 docker run --rm -v meteor_relay-data:/data -v "$PWD:/backup" alpine \
   tar czf /backup/relay-backup.tar.gz -C /data .
 ```
-
-## Без Cloudflare
-
-Если есть свой реверс-прокси с сертификатом: уберите сервис `cloudflared` и раскомментируйте `ports` у релея. Релей слушает обычный HTTP на `8088` и TLS не терминирует.
 
 ## Проверка
 
@@ -71,7 +93,9 @@ curl https://relay.example.com/status
 | Симптом | Причина |
 |---|---|
 | `set RELAY_PUBLIC_URL in .env` при старте | не заполнен `.env` |
-| Туннель рвётся каждые ~40 с, `Error 1033` | сеть фильтрует трафик к edge-диапазону Cloudflare; compose уже использует `--protocol http2` вместо QUIC, но помогает не везде |
-| `502` от Cloudflare | Public Hostname указывает не на `http://relay:8088` |
+| Туннель рвётся, `Error 1033`, запросы то проходят, то нет | сеть распознаёт и режет протокол туннеля. Проверьте MTU и потери пакетов — если они в норме, дело в фильтрации. Лечится переходом на вариант A |
+| `502` от Cloudflare | маршрут указывает не на `http://relay:8088` |
+| Caddy не получает сертификат | закрыт 80 порт (нужен для проверки домена) или включено проксирование Cloudflare на A-записи |
+| События приходят с задержкой пачками | в `Caddyfile` потерян `flush_interval -1` |
 | В логах `event for unlinked broadcaster` | пришло событие канала, который ни к кому не привязан — стример не нажал «Подключить Kick» или отвязался |
 | В логах `offline` | хост стримера не запущен; событие подтверждено, чтобы Kick не копил ретраи |
