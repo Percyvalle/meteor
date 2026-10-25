@@ -1,0 +1,34 @@
+{
+  "port": 7777,
+
+  "game": {
+    "lobbySeconds": 45,
+    "winners": 1,
+    "autoStart": true,
+    "simulateBots": 0
+  },
+
+  "replies": "minimal",
+
+  "commands": {
+    "adminRoles": ["broadcaster", "mod"],
+    "islandChoiceRoles": ["everyone"]
+  },
+
+  "twitch": {
+    "enabled": true,
+    "channel": "your_twitch_login",
+    "clientId": "",
+    "clientSecret": "",
+    "transport": "auto"
+  },
+
+  "kick": {
+    "enabled": true,
+    "channel": "your-kick-slug",
+    "clientId": "",
+    "clientSecret": "",
+    "transport": "ws",
+    "chatroomId": 0
+  }
+}

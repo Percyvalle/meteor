@@ -1,0 +1,50 @@
+# Relay plus its tunnel. Nothing is published to the host: Cloudflare reaches the
+# relay through the tunnel's outbound connection, so no port is exposed to the
+# internet and no certificate has to be managed here.
+#
+#   cd deploy && cp .env.example .env   # fill it in
+#   docker compose up -d
+#
+# To run the relay behind your own reverse proxy instead, drop the cloudflared
+# service and uncomment the ports block.
+
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: meteor-relay
+    container_name: meteor-relay
+    restart: unless-stopped
+    environment:
+      RELAY_PUBLIC_URL: ${RELAY_PUBLIC_URL:?set RELAY_PUBLIC_URL in .env}
+      KICK_CLIENT_ID: ${KICK_CLIENT_ID:?set KICK_CLIENT_ID in .env}
+      KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:?set KICK_CLIENT_SECRET in .env}
+      RELAY_STATE_FILE: /data/relay-state.json
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      # Streamer links and their Kick tokens. Losing this means everyone re-links.
+      - relay-data:/data
+    # Reverse-proxy setups only; with cloudflared the relay stays unreachable
+    # from outside the compose network.
+    # ports:
+    #   - "127.0.0.1:8088:8088"
+    networks: [meteor]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: meteor-tunnel
+    restart: unless-stopped
+    # http2 instead of QUIC: some networks drop UDP/443 outright, and the tunnel
+    # then flaps every few seconds instead of failing loudly.
+    command: tunnel --no-autoupdate --protocol http2 run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      relay:
+        condition: service_healthy
+    networks: [meteor]
+
+volumes:
+  relay-data:
+
+networks:
+  meteor:

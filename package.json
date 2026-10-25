@@ -1,0 +1,17 @@
+{
+  "name": "meteor-shower-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local host bridging Twitch and Kick chat into the Meteor Shower stream game overlay",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "dev": "node --watch server/index.mjs",
+    "check": "node --check server/index.mjs",
+    "test": "node tests/core.test.mjs && node tests/parse.test.mjs && node tests/webhook.test.mjs && node tests/relay.test.mjs && node tests/relay-e2e.test.mjs && node tests/host.test.mjs",
+    "relay": "node relay/index.mjs"
+  }
+}

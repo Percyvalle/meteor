@@ -1,0 +1,7 @@
+{
+  "port": 8088,
+  "publicUrl": "https://relay.example.com",
+  "clientId": "",
+  "clientSecret": "",
+  "sendAs": "bot"
+}

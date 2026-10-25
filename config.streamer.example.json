@@ -1,0 +1,20 @@
+{
+  "game": {
+    "lobbySeconds": 45,
+    "winners": 1,
+    "autoStart": true
+  },
+
+  "replies": "minimal",
+
+  "twitch": {
+    "enabled": true,
+    "channel": "ВАШ_НИК_НА_TWITCH"
+  },
+
+  "kick": {
+    "enabled": true,
+    "transport": "relay",
+    "relayUrl": "https://relay.cigilvpn.store"
+  }
+}

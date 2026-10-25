@@ -1,0 +1,298 @@
+<title>Метеоритный дождь — панель</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #05070f; --panel: #0c1222; --panel2: #131b33; --line: #1c2540;
+    --ink: #eaf0ff; --muted: #8d97b8; --dim: #4d5778;
+    --fire: #ff7a2f; --fire-ink: #1a0b02;
+    --ok: #7ff0c4; --warn: #ffd36b; --bad: #ff4b3a;
+    --f-ui: Rubik, "Segoe UI", Arial, sans-serif;
+    --f-mono: "JetBrains Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-ui); padding: 22px 18px 40px; }
+  .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
+  h1 { font-family: "Russo One", var(--f-ui); font-size: 20px; font-weight: 400; margin: 0; letter-spacing: .5px; }
+  h1 span { color: var(--fire); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 11px; align-content: start; }
+  .card h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row.tight { gap: 6px; }
+  label { color: var(--muted); font-size: 13px; }
+  button, select, input { font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; }
+  button { cursor: pointer; font-weight: 500; }
+  button:hover:not(:disabled) { border-color: #33416b; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--fire); color: var(--fire-ink); border-color: var(--fire); font-weight: 600; }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  button.sm { padding: 5px 9px; font-size: 13px; }
+  input { min-width: 0; }
+  input.grow { flex: 1; }
+  a { color: var(--fire); }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.connected { background: var(--ok); box-shadow: 0 0 8px rgba(127,240,196,.7); }
+  .dot.connecting, .dot.reconnecting { background: var(--warn); }
+  .dot.error { background: var(--bad); }
+  .plat { display: grid; gap: 4px; padding: 9px 11px; background: #0a0f1e; border: 1px solid var(--line); border-radius: 10px; }
+  .plat .name { font-weight: 600; font-size: 14px; }
+  .plat .detail { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); word-break: break-word; }
+  .tag { font-family: var(--f-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.on { color: var(--ok); border-color: rgba(127,240,196,.35); }
+
+  .stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 9px; }
+  .stat div { background: #0a0f1e; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .stat b { display: block; font-family: var(--f-mono); font-size: 18px; font-weight: 500; }
+  .stat small { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+
+  .islands { display: grid; gap: 5px; font-family: var(--f-mono); font-size: 12.5px; }
+  .islands div { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }
+  .islands b { color: var(--ink); font-weight: 500; }
+
+  #log { font-family: var(--f-mono); font-size: 11.5px; line-height: 1.65; background: #060a15; border: 1px solid var(--line); border-radius: 10px; padding: 10px; height: 230px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+  #log .t { color: var(--dim); }
+  #log .warn { color: var(--warn); }
+  #log .error { color: var(--bad); }
+  #log .scope { color: #5f8ad0; }
+  code { font-family: var(--f-mono); font-size: 12.5px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+  .links { font-size: 13px; color: var(--muted); display: grid; gap: 5px; }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Метеоритный <span>дождь</span> — панель</h1>
+    <div class="sub">Локальный хост <span id="hoststate">подключение…</span> · оверлеев подключено: <b id="overlays">0</b></div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Матч</h2>
+      <div class="stat">
+        <div><b id="s-phase">—</b><small>фаза</small></div>
+        <div><b id="s-players">0</b><small>игроков</small></div>
+        <div><b id="s-alive">0</b><small>живых</small></div>
+        <div><b id="s-timer">—</b><small>до старта</small></div>
+      </div>
+      <div class="row">
+        <button id="b-start" class="primary" type="button">Новая игра</button>
+        <button id="b-go" type="button">Старт сейчас</button>
+        <button id="b-reset" type="button">Сброс</button>
+      </div>
+      <div class="row">
+        <label for="winners">Победителей</label>
+        <select id="winners"></select>
+      </div>
+      <div class="islands" id="islands"></div>
+    </div>
+
+    <div class="card">
+      <h2>Платформы</h2>
+      <div id="platforms"></div>
+      <div class="sub">Чтение работает и без авторизации (Twitch — анонимно). Авторизация нужна, чтобы бот <b>писал</b> в чат.</div>
+    </div>
+
+    <div class="card">
+      <h2>Тестовое сообщение</h2>
+      <div class="sub">Прогоняет весь путь «чат → роутер → оверлей» без живого чата.</div>
+      <div class="row tight">
+        <select id="i-plat"><option value="local">local</option><option value="twitch">twitch</option><option value="kick">kick</option></select>
+        <input id="i-nick" class="grow" placeholder="ник" value="tester" size="8">
+      </div>
+      <div class="row tight">
+        <input id="i-text" class="grow" placeholder="!join 2" value="!join">
+        <button id="b-inject" type="button">Отправить</button>
+      </div>
+      <div class="row tight">
+        <button class="sm" data-fill="!join" type="button">!join</button>
+        <button class="sm" data-fill="!join 1" type="button">!join 1</button>
+        <button class="sm" data-fill="!join 2" type="button">!join 2</button>
+        <button class="sm" data-fill="!join 3" type="button">!join 3</button>
+        <button class="sm" data-fill="!meteor go" type="button">!meteor go</button>
+      </div>
+      <div class="row tight">
+        <label for="i-n">Пачкой</label>
+        <input id="i-n" type="number" value="25" min="1" max="500" style="width:70px">
+        <button id="b-flood" class="sm" type="button">случайных !join</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Ссылки и команды</h2>
+      <div class="links">
+        <div>OBS Browser Source, 1920×1080:<br><code id="overlay-url">—</code></div>
+        <div style="margin-top:4px">В чате: <code>!join</code> <code>!join 1-3</code></div>
+        <div>Модератор: <code>!meteor start</code> <code>!meteor go</code> <code>!meteor reset</code> <code>!meteor winners N</code></div>
+      </div>
+      <div class="row">
+        <a id="open-overlay" href="/overlay.html" target="_blank">Открыть оверлей ↗</a>
+        <span class="sub">·</span>
+        <a href="/overlay.html?solo=1&amp;bots=300" target="_blank">Демо без чата ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Лог хоста</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script type="module">
+import { connect, post, get } from './js/net.js';
+
+const $ = id => document.getElementById(id);
+const PLATFORMS = { twitch: 'Twitch', kick: 'Kick' };
+let state = { session: {}, adapters: {} };
+
+$('overlay-url').textContent = `${location.origin}/overlay.html?obs=1`;
+$('open-overlay').href = '/overlay.html?obs=1';
+
+for (let i = 1; i <= 20; i++) {
+  const o = document.createElement('option');
+  o.value = o.textContent = String(i);
+  $('winners').append(o);
+}
+
+/* ---------- rendering ---------- */
+
+const PHASE = {
+  idle: 'ожидание', lobby: 'лобби', countdown: 'отсчёт',
+  qual: 'отбор', transfer: 'перелёт', final: 'финал', won: 'победа',
+};
+
+function renderSession(s) {
+  if (!s) return;
+  state.session = s;
+  $('s-phase').textContent = PHASE[s.phase] || s.phase || '—';
+  $('s-players').textContent = s.players ?? 0;
+  $('s-alive').textContent = s.alive ?? 0;
+  $('s-timer').textContent = s.phase === 'lobby' ? `${s.lobbyLeft}s` : '—';
+  if (s.winners && $('winners').value !== String(s.winners)) $('winners').value = String(s.winners);
+
+  const lobby = s.phase === 'lobby';
+  $('b-go').disabled = !lobby;
+  $('b-start').textContent = lobby ? 'Перезапустить лобби' : 'Новая игра';
+
+  $('islands').innerHTML = (s.islands || []).map(i =>
+    `<div><span>${i.id}. ${i.name} <span class="tag">опасность ${i.danger}</span></span><b>${i.players} → ${i.quota}</b></div>`
+  ).join('') || '<div><span>острова появятся после старта лобби</span></div>';
+}
+
+function renderAdapters(a) {
+  if (!a) return;
+  state.adapters = a;
+  $('platforms').innerHTML = Object.entries(PLATFORMS).map(([k, label]) => {
+    const d = a[k] || { status: 'off' };
+    return `<div class="plat">
+      <div class="row tight" style="justify-content:space-between">
+        <span class="row tight"><i class="dot ${d.status}"></i><span class="name">${label}</span></span>
+        <span class="row tight">
+          <span class="tag ${d.writable ? 'on' : ''}">${d.writable ? 'чтение+запись' : 'только чтение'}</span>
+          ${d.transport === 'relay'
+            ? (d.linked
+                ? `<button class="sm" data-cmd="unlink" data-plat="${k}" type="button">отвязать</button>`
+                : `<button class="sm primary" data-link="${k}" type="button">Подключить ${label}</button>`)
+            : d.authorized
+              ? `<button class="sm" data-cmd="logout" data-plat="${k}" type="button">выйти</button>`
+              : `<a class="tag" href="/auth/${k}">авторизовать</a>`}
+          <button class="sm" data-cmd="reconnect" data-plat="${k}" type="button">↻</button>
+        </span>
+      </div>
+      <div class="detail">${d.status}${d.detail ? ' — ' + esc(d.detail) : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+
+function addLog(rec) {
+  const el = $('log');
+  const near = el.scrollTop + el.clientHeight > el.scrollHeight - 40;
+  const t = new Date(rec.at).toTimeString().slice(0, 8);
+  const extra = rec.extra == null ? '' : ' ' + (typeof rec.extra === 'string' ? rec.extra : JSON.stringify(rec.extra));
+  const line = document.createElement('div');
+  line.className = rec.level;
+  line.innerHTML = `<span class="t">${t}</span> <span class="scope">${rec.scope}</span> ${esc(rec.msg + extra)}`;
+  el.append(line);
+  while (el.childElementCount > 300) el.firstElementChild.remove();
+  if (near) el.scrollTop = el.scrollHeight;
+}
+
+/* ---------- transport ---------- */
+
+connect('control', m => {
+  if (m.t === 'hello') {
+    renderSession(m.session);
+    renderAdapters(m.adapters);
+    (m.log || []).forEach(addLog);
+  } else if (m.t === 'phase') renderSession(m.session);
+  else if (m.t === 'status') renderAdapters(m.adapters);
+  else if (m.t === 'log') addLog(m.rec);
+}, s => {
+  $('hoststate').textContent = s === 'connected' ? 'на связи' : 'переподключение…';
+});
+
+async function refresh() {
+  const r = await get('/api/state');
+  if (r.ok) { renderSession(r.session); renderAdapters(r.adapters); $('overlays').textContent = r.overlays; }
+}
+refresh();
+setInterval(refresh, 4000);
+
+/* ---------- actions ---------- */
+
+const cmd = (name, extra) => post('/api/cmd', Object.assign({ name }, extra));
+
+$('b-start').onclick = () => cmd('start');
+$('b-go').onclick = () => cmd('go');
+$('b-reset').onclick = () => cmd('reset');
+$('winners').onchange = e => cmd('winners', { value: +e.target.value });
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-cmd]');
+  if (b) cmd(b.dataset.cmd, { platform: b.dataset.plat }).then(refresh);
+  const f = e.target.closest('[data-fill]');
+  if (f) { $('i-text').value = f.dataset.fill; inject(); }
+
+  const l = e.target.closest('[data-link]');
+  if (l) {
+    l.disabled = true;
+    post('/api/cmd', { name: 'link', platform: l.dataset.link }).then(r => {
+      l.disabled = false;
+      // The relay hands back a one-time URL; the streamer approves on Kick itself.
+      if (r.ok && r.url) window.open(r.url, '_blank', 'noopener');
+      else alert('Не удалось получить ссылку: ' + (r.error || 'неизвестная ошибка'));
+    });
+  }
+});
+
+function inject(over) {
+  const nick = (over && over.nick) || $('i-nick').value.trim() || 'tester';
+  return post('/api/chat/inject', {
+    platform: $('i-plat').value,
+    userId: nick.toLowerCase(),
+    display: nick,
+    text: (over && over.text) || $('i-text').value,
+    // Manual sends come from the streamer's own panel, so they carry full rights;
+    // flood-generated users are plain viewers.
+    roles: over ? {} : { broadcaster: true, mod: true },
+  });
+}
+$('b-inject').onclick = () => inject();
+$('i-text').addEventListener('keydown', e => { if (e.key === 'Enter') inject(); });
+
+$('b-flood').onclick = async () => {
+  const n = Math.max(1, Math.min(500, +$('i-n').value || 25));
+  for (let i = 0; i < n; i++) {
+    const nick = 'test_' + Math.random().toString(36).slice(2, 8);
+    const pick = Math.random();
+    await inject({ nick, text: pick < 0.4 ? '!join' : `!join ${1 + Math.floor(Math.random() * 3)}` });
+  }
+};
+</script>
