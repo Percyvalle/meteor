@@ -6,6 +6,7 @@ import { makeBots } from './bots.js';
 
 /* ---------- config ---------- */
 let LOBBY = 45;        // seconds the lobby stays open
+let MIN_PLAYERS = 2;   // the lobby clock holds until this many are in
 let SIM_COUNT = 300;   // bots used when simulating
 let WINNERS = 1;
 let cv = null, ctx = null;
@@ -464,11 +465,15 @@ function drawHUD(now, dt) {
     ctx.textAlign = 'center'; ctx.font = `500 19px ${F_UI}`; ctx.fillStyle = C.muted;
     ctx.fillText('опасность островов откроется после старта · просто !join — на свободный остров', W / 2, y + 98);
     ctx.fillStyle = C.ink; ctx.font = `500 21px ${F_UI}`;
-    const left = ph === 'lobby' ? `  ·  старт через ${fmtTime(lobbyLeft)}` : '  ·  ждём открытия набора';
+    const holding = ph === 'lobby' && game.alive < MIN_PLAYERS;
+    const left = ph !== 'lobby' ? '  ·  ждём открытия набора'
+      : holding ? `  ·  ждём ещё ${MIN_PLAYERS - game.alive} — и пойдёт отсчёт`
+      : `  ·  старт через ${fmtTime(lobbyLeft)}`;
     ctx.fillText(`Участников: ${game.alive}  ·  победителей: ${game.winnersN}${left}`, W / 2, y + 134);
     if (ph === 'lobby') {
       ctx.fillStyle = 'rgba(255,255,255,0.08)'; rrect(ctx, x + 60, y + 154, w - 120, 6, 3); ctx.fill();
-      ctx.fillStyle = C.fire; rrect(ctx, x + 60, y + 154, (w - 120) * clamp(1 - lobbyLeft / lobbyDur, 0, 1), 6, 3); ctx.fill();
+      // While the clock is held the bar stays empty rather than pretending to fill.
+      if (!holding) { ctx.fillStyle = C.fire; rrect(ctx, x + 60, y + 154, (w - 120) * clamp(1 - lobbyLeft / lobbyDur, 0, 1), 6, 3); ctx.fill(); }
     }
   }
   if (ph === 'countdown') {
@@ -538,11 +543,15 @@ function frame(nowMs) {
   const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
   const now = nowMs / 1000;
   if (game.phase === 'lobby') {
-    lobbyLeft -= dt;
+    // Bots keep trickling in even while the clock is held — they are what opens
+    // the gate when the lobby is being simulated.
     if (fakeQueue.length) {
       fakeAcc += fakeRate * dt;
       while (fakeAcc >= 1 && fakeQueue.length) { fakeAcc--; addBot(fakeQueue.shift()); }
     }
+    // No countdown into an empty lobby: it cannot start a match and on stream it
+    // just looks broken. The clock begins once there is someone to play against.
+    if (game.alive >= MIN_PLAYERS) lobbyLeft -= dt;
     if (botsActive && game.alive > 30) {
       swapAcc += dt * 1.6;
       while (swapAcc >= 1) { swapAcc--; const bots = game.players; const p = bots[Math.floor(Math.random() * bots.length)]; if (p && p.bot) game.addPlayer({ key: p.key, display: p.name, platform: p.platform }, game.leastIsland() + 1); }
@@ -706,6 +715,7 @@ function startLobby(opts) {
   if (o.seed !== undefined) { game = new Game(o.seed >>> 0, o.winners || WINNERS); resetRender(); renderGround(); }
   else if (game.phase !== 'idle') newGame(false);
   if (o.winners) { WINNERS = clamp(o.winners | 0, 1, 20); game.setWinners(WINNERS); }
+  if (o.min !== undefined) MIN_PLAYERS = clamp(o.min | 0, 2, 20);
   game.openLobby();
   lobbyDur = lobbyLeft = (o.lobby !== undefined ? clamp(+o.lobby, 5, 600) : LOBBY);
   if (o.left !== undefined) lobbyLeft = clamp(+o.left, 0, lobbyDur);
@@ -746,6 +756,8 @@ function snapshot() {
     phase: game.phase, alive: game.alive, winners: game.winnersN, seed: game.seed,
     lobbyLeft: game.phase === 'lobby' ? Math.max(0, lobbyLeft) : 0,
     lobbyDur, simulated: botsActive,
+    minPlayers: MIN_PLAYERS,
+    waiting: game.phase === 'lobby' && game.alive < MIN_PLAYERS,
     islands: game.islands.filter(i => i.id < 3).map(i => ({ id: i.id + 1, name: i.prof.name, danger: i.danger, quota: i.quota, players: i.n })),
   };
 }
@@ -760,6 +772,7 @@ function mount(canvas, cfg) {
   if (o.lobby !== undefined) LOBBY = clamp(+o.lobby, 5, 600);
   if (o.bots !== undefined) SIM_COUNT = clamp(o.bots | 0, 2, 1000);
   if (o.winners !== undefined) WINNERS = clamp(o.winners | 0, 1, 20);
+  if (o.min !== undefined) MIN_PLAYERS = clamp(o.min | 0, 2, 20);
   newGame(false);
   if (o.simulate) startLobby({ simulate: true });
   requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });

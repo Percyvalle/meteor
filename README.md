@@ -37,6 +37,7 @@ node server/index.mjs        # или: npm start
   "port": 7777,
   "game": {
     "lobbySeconds": 45,    // сколько лобби принимает !join
+    "minPlayers": 2,       // отсчёт не идёт, пока не наберётся столько участников
     "winners": 1,          // 1..20
     "autoStart": true,     // стартовать по истечении таймера
     "simulateBots": 0      // >0 — добить лобби ботами (для теста)

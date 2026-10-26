@@ -34,6 +34,9 @@ export class RelayAdapter extends Adapter {
     this.linked = false;
     this.channel = '';
     this.controller = null;
+    // Каждой попытке соединения свой номер: поток, который успели обогнать,
+    // не должен планировать реконнект и уводить нас в петлю.
+    this.gen = 0;
   }
 
   get auth() { return { authorization: `Bearer ${this.me.key}` }; }
@@ -45,6 +48,14 @@ export class RelayAdapter extends Adapter {
       this.fatal('kick.relayUrl не задан в config.json');
       return;
     }
+
+    // Отменяем всё, что осталось от прежних попыток: иначе отложенный реконнект
+    // откроет второе соединение поверх живого, релей отцепит первое, и мы
+    // будем переподключаться по кругу.
+    clearTimeout(this._t);
+    if (this.controller) { try { this.controller.abort(); } catch {} }
+
+    const gen = ++this.gen;
     this.setStatus('connecting');
 
     this.controller = new AbortController();
@@ -53,6 +64,7 @@ export class RelayAdapter extends Adapter {
       signal: this.controller.signal,
     });
 
+    if (gen !== this.gen) { try { await r.body.cancel(); } catch {} return; }
     if (r.status === 401) { this.fatal('релей отверг ключ агента — удалите .agent.json и перезапустите'); return; }
     if (!r.ok) throw new Error(`релей ответил ${r.status}`);
 
@@ -60,17 +72,18 @@ export class RelayAdapter extends Adapter {
     this.setStatus('connected', this.linked ? `релей — ${this.channel}` : 'релей — Kick ещё не подключён');
 
     // Node has no EventSource, but a streamed fetch body is all SSE really needs.
-    this.read(r.body).catch(e => {
-      if (!this.stopped) this.scheduleReconnect(e.name === 'AbortError' ? 'closed' : e.message);
+    this.read(r.body, gen).catch(e => {
+      if (!this.stopped && gen === this.gen) this.scheduleReconnect(e.name === 'AbortError' ? 'closed' : e.message);
     });
   }
 
-  async read(body) {
+  async read(body, gen) {
     const reader = body.getReader();
     const dec = new TextDecoder();
     let buf = '';
     while (true) {
       const { done, value } = await reader.read();
+      if (gen !== this.gen) return;         // это соединение уже заменено
       if (done) {
         if (!this.stopped) this.scheduleReconnect('поток релея закрыт');
         return;
@@ -131,6 +144,7 @@ export class RelayAdapter extends Adapter {
   }
 
   stop() {
+    this.gen++;                 // осиротевшие потоки больше ничего не планируют
     super.stop();
     try { this.controller && this.controller.abort(); } catch {}
   }

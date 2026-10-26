@@ -1,6 +1,7 @@
 {
   "game": {
     "lobbySeconds": 45,
+    "minPlayers": 2,
     "winners": 1,
     "autoStart": true
   },

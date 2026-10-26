@@ -14,6 +14,7 @@ const DEFAULTS = {
 
   game: {
     lobbySeconds: 45,       // how long the lobby accepts !join
+    minPlayers: 2,          // the lobby timer holds until this many have joined
     winners: 1,             // 1..20
     autoStart: true,        // start the match when the lobby timer runs out
     simulateBots: 0,        // >0 fills the lobby with N bots (testing)
@@ -109,6 +110,8 @@ export function loadConfig() {
 
   cfg.game.winners = Math.max(1, Math.min(20, cfg.game.winners | 0 || 1));
   cfg.game.lobbySeconds = Math.max(5, Math.min(600, +cfg.game.lobbySeconds || 45));
+  // A match needs two players to be a match at all, so 2 is also the floor.
+  cfg.game.minPlayers = Math.max(2, Math.min(20, cfg.game.minPlayers | 0 || 2));
   if (!cfg.twitch.channel) cfg.twitch.enabled = false;
   // With the relay the channel comes from the link flow, so none is configured here.
   if (!cfg.kick.channel && cfg.kick.transport !== 'relay') cfg.kick.enabled = false;

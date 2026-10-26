@@ -12,6 +12,7 @@ M.mount(document.getElementById('stage'), {
   lobby: QS.get('lobby') ? +QS.get('lobby') : undefined,
   bots: QS.get('bots') ? +QS.get('bots') : undefined,
   winners: QS.get('winners') ? +QS.get('winners') : undefined,
+  min: QS.get('min') ? +QS.get('min') : undefined,
   simulate: SIMULATE,
 });
 
@@ -38,13 +39,15 @@ if (SOLO) {
   function applySession(s) {
     if (!s || !s.open) return;
     // Rebuild the lobby from the host's seed so a reloaded overlay lands on the same match.
-    M.startLobby({ seed: s.seed, winners: s.winners, lobby: s.lobbyDur, left: s.lobbyLeft, simulate: s.simulate, bots: s.bots });
-    for (const p of s.roster || []) M.addPlayer(p, p.choice);
+    M.startLobby({ seed: s.seed, winners: s.winners, lobby: s.lobbyDur, left: s.lobbyLeft, min: s.minPlayers, simulate: s.simulate, bots: s.bots });
+    // `island` is the seat the overlay reported earlier; it beats the raw choice
+    // so an automatic pick is not re-rolled onto a different island on reload.
+    for (const p of s.roster || []) M.addPlayer(p, p.island || p.choice);
   }
 
   function runCmd(m) {
     switch (m.name) {
-      case 'start': M.startLobby({ seed: m.seed, winners: m.winners, lobby: m.lobby, simulate: m.simulate, bots: m.bots }); break;
+      case 'start': M.startLobby({ seed: m.seed, winners: m.winners, lobby: m.lobby, min: m.min, simulate: m.simulate, bots: m.bots }); break;
       case 'go': M.forceStart(); break;
       case 'reset': M.newGame(false); break;
       case 'winners': M.setWinners(m.value); break;

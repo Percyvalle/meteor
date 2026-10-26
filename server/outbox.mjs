@@ -5,7 +5,12 @@ import { logger } from './log.mjs';
 const log = logger('outbox');
 
 const TEXT = {
-  lobbyOpen: d => `☄ Метеоритный дождь! Пишите !join (или !join 1 / 2 / 3, чтобы выбрать остров). Старт через ${d.seconds} с.`,
+  // The lobby clock only starts once `min` players are in, so promising a start
+  // time before that would be a lie.
+  lobbyOpen: d => `☄ Метеоритный дождь! Пишите !join (или !join 1 / 2 / 3, чтобы выбрать остров). `
+    + (d.min > 1 ? `Отсчёт ${d.seconds} с пойдёт, как наберётся участников: ${d.min}.` : `Старт через ${d.seconds} с.`),
+  lobbyRestart: d => `☄ Новый раунд! Острова и метеориты перетасованы, участники (${d.players}) остались на своих островах. Сменить — !join 1 / 2 / 3, новым — !join. `
+    + (d.min > 1 && d.players < d.min ? `Отсчёт ${d.seconds} с пойдёт, как наберётся участников: ${d.min}.` : `Старт через ${d.seconds} с.`),
   lobbyClosing: d => `☄ ${d.seconds} с до старта — участников: ${d.players}. Успевайте !join`,
   matchStart: d => `☄ Поехали! Участников: ${d.players}. Победителей: ${d.winners}.`,
   winners: d => `☄ Победителей в этой игре: ${d.n}`,
@@ -18,7 +23,7 @@ const TEXT = {
 /* Which announcements each verbosity level lets through. */
 const LEVELS = {
   off: [],
-  minimal: ['lobbyOpen', 'lobbyClosing', 'matchStart', 'win'],
+  minimal: ['lobbyOpen', 'lobbyRestart', 'lobbyClosing', 'matchStart', 'win'],
   verbose: Object.keys(TEXT),
 };
 

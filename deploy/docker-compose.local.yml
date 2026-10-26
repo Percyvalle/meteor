@@ -1,0 +1,32 @@
+# Локальный прогон релея — без туннеля и без домена.
+#
+# Проверяется всё, кроме доставки вебхуков от Kick (для неё нужен публичный
+# адрес): привязка аккаунта через OAuth, создание подписки, соединение агента,
+# отправка в чат.
+#
+#   docker compose -f docker-compose.local.yml up -d
+#
+# В приложении Kick на время теста Redirect URI:
+#   http://localhost:8088/auth/kick/callback
+
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: meteor-relay
+    container_name: meteor-relay-local
+    restart: unless-stopped
+    environment:
+      RELAY_PUBLIC_URL: http://localhost:8088
+      KICK_CLIENT_ID: ${KICK_CLIENT_ID:?set KICK_CLIENT_ID in .env}
+      KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:?set KICK_CLIENT_SECRET in .env}
+      RELAY_STATE_FILE: /data/relay-state.json
+      LOG_LEVEL: debug
+    ports:
+      - "127.0.0.1:8088:8088"
+    volumes:
+      - relay-data-local:/data
+
+volumes:
+  relay-data-local:

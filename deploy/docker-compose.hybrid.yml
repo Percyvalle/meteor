@@ -1,0 +1,43 @@
+# Гибрид для отладки: публичный адрес настоящий, соединение агента локальное.
+#
+# Туннель переживает короткие запросы (колбэк OAuth, вебхуки — Kick их ещё и
+# повторяет), но плохо держит долгие потоки. Поэтому агент на той же машине
+# ходит на 127.0.0.1 напрямую, минуя туннель.
+#
+# Только для отладки. На сервере используйте docker-compose.direct.yml.
+
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: meteor-relay
+    container_name: meteor-relay-hybrid
+    restart: unless-stopped
+    environment:
+      RELAY_PUBLIC_URL: ${RELAY_PUBLIC_URL:?set RELAY_PUBLIC_URL in .env}
+      KICK_CLIENT_ID: ${KICK_CLIENT_ID:?set KICK_CLIENT_ID in .env}
+      KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:?set KICK_CLIENT_SECRET in .env}
+      RELAY_STATE_FILE: /data/relay-state.json
+      LOG_LEVEL: debug
+    ports:
+      - "127.0.0.1:8088:8088"      # для локального агента
+    volumes:
+      - relay-data-local:/data
+    networks: [meteor]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: meteor-tunnel-hybrid
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      relay:
+        condition: service_healthy
+    networks: [meteor]
+
+volumes:
+  relay-data-local:
+
+networks:
+  meteor:

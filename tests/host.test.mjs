@@ -22,6 +22,9 @@ const say = (nick, text, roles) => post('/api/chat/inject', {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const of = t => got.filter(m => m.t === t);
 const cmds = name => got.filter(m => m.t === 'cmd' && m.name === name);
+/* The host pushes a `phase` heartbeat every second while the lobby is open, so
+   "nothing happened" means no command and no join — not a silent stream. */
+const acted = () => got.filter(m => m.t !== 'phase');
 
 /* ---- fake overlay on the SSE stream ---- */
 async function subscribe() {
@@ -89,7 +92,7 @@ check('per-user rate limit caps the burst', of('join').length <= 3, `${of('join'
 got.length = 0;
 await say('alice', '!me');
 await sleep(200);
-check('!me is ignored', got.length === 0, JSON.stringify(got));
+check('!me is ignored', acted().length === 0, JSON.stringify(acted()));
 
 /* ---- unknown commands and plain chat are ignored ---- */
 got.length = 0;
@@ -97,7 +100,7 @@ await say('alice', 'hello everyone');
 await say('alice', '!notacommand');
 await say('streamer', '!meteor nonsense', { broadcaster: true });
 await sleep(250);
-check('plain chat and unknown commands are ignored', got.length === 0, JSON.stringify(got));
+check('plain chat and unknown commands are ignored', acted().length === 0, JSON.stringify(acted()));
 
 /* ---- winners ---- */
 got.length = 0;
@@ -138,6 +141,50 @@ const hello2 = JSON.parse(new TextDecoder().decode(t2.value).split('\n').find(l 
 check('a fresh overlay is handed the lobby roster', hello2.session.open && hello2.session.roster.length === 2,
   `roster=${(hello2.session.roster || []).map(p => p.display).join(',')}`);
 check('resync carries the same seed', hello2.session.seed > 0);
+
+/* ---- restart keeping the roster ---- */
+await post('/api/cmd', { name: 'reset' });
+got.length = 0;
+await post('/api/cmd', { name: 'start' });
+await sleep(150);
+await say('gina', '!join 2');          // explicit island
+await say('hugo', '!join');            // automatic — the overlay decides
+await sleep(250);
+// The fake overlay reports where it actually seated them.
+await post('/api/report', { type: 'joinResult', key: 'twitch:gina', ok: true, island: 2 });
+await post('/api/report', { type: 'joinResult', key: 'twitch:hugo', ok: true, island: 1 });
+await sleep(150);
+
+got.length = 0;
+await post('/api/cmd', { name: 'start', keep: true });
+await sleep(250);
+const again = cmds('start')[0];
+check('a keep-restart re-opens the lobby', !!again && again.keep === true);
+check('the keep-restart rolls a new seed', !!again && again.seed > 0 && again.seed !== start.seed);
+const seats = of('join');
+check('kept players are replayed as joins', seats.length === 2, `got ${seats.length}`);
+check('an explicit island survives the restart',
+  seats.some(j => j.key === 'twitch:gina' && j.choice === 2), JSON.stringify(seats));
+check('an automatic island survives the restart',
+  seats.some(j => j.key === 'twitch:hugo' && j.choice === 1), JSON.stringify(seats));
+st = await fetch(BASE + '/api/state').then(r => r.json());
+check('the roster is not emptied by a keep-restart', st.session.players === 2, `players=${st.session.players}`);
+check('the keep-restart leaves the lobby open', st.session.phase === 'lobby' && st.session.open === true);
+
+/* ---- a plain start still wipes the roster ---- */
+await post('/api/cmd', { name: 'start' });
+await sleep(150);
+st = await fetch(BASE + '/api/state').then(r => r.json());
+check('a plain start still clears the roster', st.session.players === 0, `players=${st.session.players}`);
+
+/* ---- !meteor restart keeps the roster too ---- */
+await say('ivan', '!join 3');
+await sleep(200);
+got.length = 0;
+await say('streamer3', '!meteor restart', { broadcaster: true });
+await sleep(250);
+check('!meteor restart keeps the players', cmds('start')[0] && cmds('start')[0].keep === true
+  && of('join').some(j => j.key === 'twitch:ivan' && j.choice === 3), JSON.stringify(got));
 
 /* ---- static files and the traversal guard ---- */
 for (const [path, want] of [['/overlay.html', 200], ['/control.html', 200], ['/js/core.js', 200], ['/nope.html', 404]]) {

@@ -40,6 +40,8 @@ export class Session {
       winners: this.winners,
       lobbyDur: this.lobbyDur,
       lobbyLeft: Math.max(0, Math.round(this.lobbyLeft)),
+      minPlayers: this.cfg.game.minPlayers,
+      waiting: this.phase === 'lobby' && this.roster.size < this.need(),
       alive: this.alive,
       players: this.roster.size,
       islands: this.islands,
@@ -52,36 +54,67 @@ export class Session {
 
   push() { this.hub.send({ t: 'phase', session: this.publicSnapshot() }); }
 
-  /* The roster can be hundreds of entries; the control panel does not need it. */
+  rosterList() { return [...this.roster.values()]; }
+
+  /* The roster can be hundreds of entries, so it stays out of the once-a-second
+     phase push. The control panel gets it once on connect and then keeps its own
+     copy up to date from the 'join' events. */
   publicSnapshot() {
     const s = this.snapshot();
     delete s.roster;
     return s;
   }
 
-  start() {
+  /* opts.keepRoster: re-open the lobby on a fresh seed without losing the
+     participants. Everything random (danger levels, quotas, meteor pacing) is
+     rolled again, but every kept player is re-seated on the island they ended
+     up on last time; during the lobby they are still free to switch with
+     !join N, and newcomers can still join. */
+  start(opts) {
+    const keep = !!(opts && opts.keepRoster);
     // reset() returns everything to the configured defaults, but a winner count
     // set before the lobby opened is a deliberate choice and must survive.
     const winners = this.winners;
+    const kept = keep ? this.roster : null;
     this.reset(true);
     this.winners = winners;
+    if (kept) this.roster = kept;
     this.seed = randomInt(0, 2 ** 31) >>> 0;
     this.phase = 'lobby';
     this.lobbyDur = this.cfg.game.lobbySeconds;
     this.lobbyLeft = this.lobbyDur;
-    log.info(`lobby open — seed ${this.seed}, ${this.winners} winner(s), ${this.lobbyDur}s`);
+    log.info(`lobby open — seed ${this.seed}, ${this.winners} winner(s), ${this.lobbyDur}s`
+      + (keep ? `, ${this.roster.size} player(s) kept` : ''));
     this.hub.send({
-      t: 'cmd', name: 'start',
-      seed: this.seed, winners: this.winners, lobby: this.lobbyDur,
+      t: 'cmd', name: 'start', keep,
+      seed: this.seed, winners: this.winners, lobby: this.lobbyDur, min: this.cfg.game.minPlayers,
       simulate: this.cfg.game.simulateBots > 0, bots: this.cfg.game.simulateBots,
     });
-    this.outbox.announce('lobbyOpen', { seconds: this.lobbyDur });
+    // The overlay rebuilt an empty lobby from the seed; hand it the roster back.
+    // `seat()` is the island they actually stood on, so an automatic pick made in
+    // the previous round is honoured instead of being re-rolled.
+    if (keep) for (const p of this.roster.values()) {
+      this.hub.send({ t: 'join', key: p.key, display: p.display, platform: p.platform, choice: this.seat(p) });
+    }
+    if (keep) this.outbox.announce('lobbyRestart', { seconds: this.lobbyDur, players: this.roster.size, min: this.need() });
+    else this.outbox.announce('lobbyOpen', { seconds: this.lobbyDur, min: this.need() });
     this.tick = setInterval(() => this.onTick(), 1000);
     this.push();
   }
 
+  /* Island to put a kept player back on: the one the overlay reported for them,
+     falling back to their explicit choice (0 = let the overlay decide). */
+  seat(p) { return p.island || p.choice || 0; }
+
+  /* How many joins the countdown waits for. Simulated bots never reach the host
+     roster, so with them on the gate would never open and is simply off. */
+  need() { return this.cfg.game.simulateBots > 0 ? 0 : this.cfg.game.minPlayers; }
+
   onTick() {
     if (this.phase !== 'lobby') { clearInterval(this.tick); this.tick = null; return; }
+    // An empty lobby counting down to nothing reads as broken on stream, and the
+    // match cannot start anyway. Hold the clock until there is someone to play.
+    if (this.roster.size < this.need()) { this.push(); return; }
     this.lobbyLeft -= 1;
     for (const mark of [30, 10]) {
       if (this.lobbyLeft <= mark && !this.warned.has(mark) && this.lobbyDur > mark + 5) {
@@ -113,7 +146,12 @@ export class Session {
   join(p) {
     const prev = this.roster.get(p.key);
     if (prev && prev.choice === p.choice) return;       // same request twice, nothing to do
-    this.roster.set(p.key, { key: p.key, display: p.display, platform: p.platform, choice: p.choice });
+    // `island` is where the overlay actually seated them; it survives a re-join
+    // until the next joinResult corrects it, so a restart never loses the seat.
+    this.roster.set(p.key, {
+      key: p.key, display: p.display, platform: p.platform, choice: p.choice,
+      island: p.choice || (prev ? prev.island : 0) || 0,
+    });
     this.hub.send({ t: 'join', key: p.key, display: p.display, platform: p.platform, choice: p.choice });
   }
 
@@ -126,6 +164,12 @@ export class Session {
         if (Array.isArray(m.islands)) this.islands = m.islands;
         if (m.winners) this.winners = m.winners;
         if (this.phase !== 'lobby' && this.tick) { clearInterval(this.tick); this.tick = null; }
+        // A report an overlay was still finishing when the lobby opened can land
+        // right after start() and stop the clock for good. The next report says
+        // 'lobby' again, so revive the ticker instead of staying frozen.
+        else if (this.phase === 'lobby' && !this.tick && this.lobbyLeft > 0) {
+          this.tick = setInterval(() => this.onTick(), 1000);
+        }
         if (this.phase === 'countdown' || this.phase === 'qual') {
           this.outbox.announce('matchStart', { players: m.alive, winners: this.winners });
         }
@@ -141,9 +185,12 @@ export class Session {
       case 'kill':
         if (this.cfg.replies === 'verbose') this.outbox.announce('kill', m);
         break;
-      case 'joinResult':
-        if (!m.ok) this.roster.delete(m.key);
+      case 'joinResult': {
+        if (!m.ok) { this.roster.delete(m.key); break; }
+        const e = this.roster.get(m.key);
+        if (e && m.island) e.island = m.island;
         break;
+      }
       case 'newgame':
         break;
     }

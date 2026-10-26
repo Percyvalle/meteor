@@ -69,6 +69,7 @@ export class CommandRouter {
     log.info(`admin ${m.platform}/${m.display}: ${body}`);
     switch (sub) {
       case 'start': this.session.start(); break;
+      case 'restart': this.session.start({ keepRoster: true }); break;
       case 'go': this.session.go(); break;
       case 'reset': this.session.reset(); break;
       case 'winners': {

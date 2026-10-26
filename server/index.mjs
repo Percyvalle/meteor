@@ -138,7 +138,7 @@ const server = createServer(async (req, res) => {
       const role = url.searchParams.get('role') === 'overlay' ? 'overlay' : 'control';
       const hello = role === 'overlay'
         ? { t: 'hello', session: session.snapshot() }
-        : { t: 'hello', session: session.publicSnapshot(), adapters: adapterInfo(), config: publicConfig(cfg), log: recent(60) };
+        : { t: 'hello', session: session.publicSnapshot(), roster: session.rosterList(), adapters: adapterInfo(), config: publicConfig(cfg), log: recent(60) };
       hub.attach(res, role, hello);
       return;
     }
@@ -158,7 +158,8 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/cmd') {
       const b = await readBody(req);
       switch (b.name) {
-        case 'start': session.start(); break;
+        // keep: re-roll the match but hold on to the players already in the lobby
+        case 'start': session.start({ keepRoster: !!b.keep }); break;
         case 'go': session.go(); break;
         case 'reset': session.reset(false); break;
         case 'winners': session.setWinners(b.value); break;

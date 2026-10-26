@@ -5,142 +5,276 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
-    --bg: #05070f; --panel: #0c1222; --panel2: #131b33; --line: #1c2540;
-    --ink: #eaf0ff; --muted: #8d97b8; --dim: #4d5778;
-    --fire: #ff7a2f; --fire-ink: #1a0b02;
-    --ok: #7ff0c4; --warn: #ffd36b; --bad: #ff4b3a;
+    --bg: #04060d; --panel: #0b1120; --panel2: #121a30; --well: #080d1a; --line: #1a2340; --line2: #2a3760;
+    --ink: #eaf0ff; --muted: #8f99ba; --dim: #56608a;
+    --fire: #ff7a2f; --fire2: #ffb067; --fire-ink: #1a0b02;
+    --ok: #7ff0c4; --warn: #ffd36b; --bad: #ff5a48; --blue: #6f96dc;
     --f-ui: Rubik, "Segoe UI", Arial, sans-serif;
     --f-mono: "JetBrains Mono", Consolas, monospace;
+    --f-head: "Russo One", Rubik, sans-serif;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-ui); padding: 22px 18px 40px; }
-  .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
-  h1 { font-family: "Russo One", var(--f-ui); font-size: 20px; font-weight: 400; margin: 0; letter-spacing: .5px; }
-  h1 span { color: var(--fire); }
-  .sub { color: var(--muted); font-size: 13px; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 11px; align-content: start; }
-  .card h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0; font-weight: 600; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .row.tight { gap: 6px; }
+  html { background: var(--bg); }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.5 var(--f-ui); padding: 28px 20px 48px;
+    background:
+      radial-gradient(900px 380px at 85% -120px, rgba(255,122,47,.13), transparent 70%),
+      radial-gradient(700px 300px at 0% -80px, rgba(111,150,220,.08), transparent 70%),
+      var(--bg);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 22px; }
+
+  /* header */
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; padding-bottom: 10px; }
+  .brand { display: grid; gap: 4px; flex: 1 1 auto; min-width: 0; }
+  .eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+  h1 { font-family: var(--f-head); font-size: clamp(22px, 4vw, 28px); line-height: 1.2; white-space: nowrap; font-weight: 400; margin: 0; letter-spacing: .3px; }
+  h1 span { color: var(--fire); text-shadow: 0 0 24px rgba(255,122,47,.45); }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(11,17,32,.8); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .pill b { color: var(--ink); font-family: var(--f-mono); font-weight: 500; }
+  .pill.up { border-color: rgba(127,240,196,.3); color: var(--ink); }
+  .pill.up .dot { background: var(--ok); box-shadow: 0 0 8px rgba(127,240,196,.7); }
+  .pill.down .dot { background: var(--warn); animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  /* layout */
+  .grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: stretch; }
+  .card .note:last-child, .card .linkrow:last-child { margin-top: auto; }
+  .grid > .card { display: flex; flex-direction: column; }
+  .col { display: grid; gap: 18px; align-content: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: minmax(0,1fr); } }
+
+  .card { background: linear-gradient(180deg, #0d1426, var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px 22px; display: grid; gap: 17px; align-content: start; box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 18px 40px -24px rgba(0,0,0,.8); }
+  .card.hero { border-color: #26304f; }
+  .card-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .card h2 { display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; }
+  .card h2::before { content: ""; width: 6px; height: 6px; transform: rotate(45deg); background: var(--fire); box-shadow: 0 0 8px rgba(255,122,47,.6); }
+  .divider { height: 1px; background: var(--line); margin: 2px 0; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .row.tight { gap: 8px; }
+  .row.split { justify-content: space-between; }
+  .sub { color: var(--muted); font-size: 13px; text-wrap: pretty; }
+  .sub b { color: var(--ink); font-weight: 500; }
   label { color: var(--muted); font-size: 13px; }
-  button, select, input { font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; }
+
+  button, select, input { font: inherit; font-size: 14px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; transition: border-color .15s, background .15s, filter .15s, transform .05s; }
   button { cursor: pointer; font-weight: 500; }
-  button:hover:not(:disabled) { border-color: #33416b; }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  button.primary { background: var(--fire); color: var(--fire-ink); border-color: var(--fire); font-weight: 600; }
-  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
-  button.sm { padding: 5px 9px; font-size: 13px; }
-  input { min-width: 0; }
+  button:hover:not(:disabled) { border-color: var(--line2); background: #172140; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: linear-gradient(180deg, var(--fire2), var(--fire) 60%); color: var(--fire-ink); border-color: var(--fire); font-weight: 600; box-shadow: 0 6px 20px -8px rgba(255,122,47,.7); }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); background: linear-gradient(180deg, var(--fire2), var(--fire) 60%); border-color: var(--fire); }
+  button.ghost { background: transparent; }
+  button.ghost:hover:not(:disabled) { border-color: rgba(255,90,72,.5); color: #ffb3a8; background: rgba(255,90,72,.06); }
+  button.sm { padding: 5px 10px; font-size: 12.5px; border-radius: 8px; }
+  button.chip { font-family: var(--f-mono); font-size: 13px; padding: 7px 13px; border-radius: 999px; background: var(--well); color: var(--muted); }
+  button.chip:hover { color: var(--ink); }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--fire); outline-offset: 2px; }
+  input:focus, select:focus { border-color: var(--line2); outline: none; }
+  select { cursor: pointer; padding-right: 10px; }
+  input { min-width: 0; background: var(--well); }
+  input::placeholder { color: var(--dim); }
   input.grow { flex: 1; }
-  a { color: var(--fire); }
+  a { color: var(--fire); text-decoration: none; }
+  a:hover { color: var(--fire2); text-decoration: underline; text-underline-offset: 3px; }
 
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  /* match */
+  .stat { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 520px) { .stat { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stat div { background: var(--well); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 10px; display: grid; gap: 2px; }
+  .stat div:first-child { border-color: rgba(255,122,47,.35); background: linear-gradient(180deg, rgba(255,122,47,.10), var(--well)); }
+  .stat div:first-child b { color: var(--fire2); font-family: var(--f-head); font-weight: 400; font-size: 20px; }
+  .stat b { display: block; font-family: var(--f-mono); font-size: 24px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat small { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; order: -1; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  .winners { display: inline-flex; align-items: center; gap: 8px; padding: 3px 3px 3px 12px; background: var(--well); border: 1px solid var(--line); border-radius: 12px; }
+  .winners select { padding: 6px 10px; border-radius: 9px; font-family: var(--f-mono); }
+
+  .islands { display: grid; gap: 10px; }
+  .isl { display: grid; gap: 7px; padding: 10px 12px; background: var(--well); border: 1px solid var(--line); border-radius: 12px; }
+  .isl-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .isl-name { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; min-width: 0; }
+  .isl-n { font-family: var(--f-mono); font-size: 11px; color: var(--dim); width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; flex: none; }
+  .isl b { font-family: var(--f-mono); font-weight: 500; font-size: 13px; white-space: nowrap; }
+  .isl b i { font-style: normal; color: var(--dim); margin: 0 4px; }
+  .bar { height: 4px; border-radius: 4px; background: #141c33; overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--fire), var(--fire2)); transition: width .4s; }
+  .danger { display: inline-flex; gap: 2px; align-items: center; font-family: var(--f-mono); font-size: 10.5px; color: var(--muted); padding: 1px 7px; border-radius: 5px; border: 1px solid var(--line); }
+  .danger.d2 { color: var(--warn); border-color: rgba(255,211,107,.3); }
+  .danger.d3, .danger.d4, .danger.d5 { color: var(--bad); border-color: rgba(255,90,72,.35); }
+  .empty { padding: 16px; text-align: center; color: var(--dim); font-size: 13px; border: 1px dashed var(--line); border-radius: 12px; }
+
+  /* platforms */
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; display: inline-block; }
   .dot.connected { background: var(--ok); box-shadow: 0 0 8px rgba(127,240,196,.7); }
-  .dot.connecting, .dot.reconnecting { background: var(--warn); }
-  .dot.error { background: var(--bad); }
-  .plat { display: grid; gap: 4px; padding: 9px 11px; background: #0a0f1e; border: 1px solid var(--line); border-radius: 10px; }
-  .plat .name { font-weight: 600; font-size: 14px; }
-  .plat .detail { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); word-break: break-word; }
-  .tag { font-family: var(--f-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); }
-  .tag.on { color: var(--ok); border-color: rgba(127,240,196,.35); }
+  .dot.connecting, .dot.reconnecting { background: var(--warn); box-shadow: 0 0 8px rgba(255,211,107,.5); animation: blink 1.2s infinite; }
+  .dot.error { background: var(--bad); box-shadow: 0 0 8px rgba(255,90,72,.6); }
+  #platforms { display: grid; gap: 12px; flex: 1; grid-auto-rows: 1fr; }
+  .plat { display: flex; flex-direction: column; }
+  .plat .detail { flex: 1; display: grid; align-content: center; gap: 3px; padding: 10px 12px; border-top: none; border-radius: 9px; background: rgba(255,255,255,.02); border: 1px solid var(--line); }
+  .plat .st { font-family: var(--f-mono); font-size: 14px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .plat .st.connected { color: var(--ok); }
+  .plat .st.connecting, .plat .st.reconnecting { color: var(--warn); }
+  .plat .st.error { color: var(--bad); }
+  .plat .name { font-size: 17px; }
+  .plat-r button.sm { padding: 7px 13px; font-size: 13.5px; }
+  .plat-r .tag { font-size: 12px; padding: 6px 11px; border-radius: 8px; }
+  .plat { display: grid; gap: 8px; padding: 12px 14px; background: var(--well); border: 1px solid var(--line); border-radius: 12px; }
+  .plat .name { font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .plat-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .plat-l { display: flex; align-items: center; gap: 9px; flex: none; }
+  .plat-r { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; margin-left: auto; }
+  .plat .detail { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); word-break: break-word; padding-top: 8px; border-top: 1px solid var(--line); }
+  .tag { font-family: var(--f-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .tag.on { color: var(--ok); border-color: rgba(127,240,196,.35); background: rgba(127,240,196,.06); }
+  a.tag { color: var(--fire); border-color: rgba(255,122,47,.4); background: rgba(255,122,47,.06); }
+  a.tag:hover { text-decoration: none; background: rgba(255,122,47,.14); }
+  .note { font-size: 12.5px; color: var(--muted); padding: 10px 12px; border-radius: 10px; background: rgba(111,150,220,.06); border: 1px solid rgba(111,150,220,.18); text-wrap: pretty; }
+  .note b { color: var(--ink); font-weight: 500; }
 
-  .stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 9px; }
-  .stat div { background: #0a0f1e; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
-  .stat b { display: block; font-family: var(--f-mono); font-size: 18px; font-weight: 500; }
-  .stat small { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  /* test */
+  .field { display: flex; gap: 8px; align-items: stretch; }
+  .field select { flex: none; font-family: var(--f-mono); font-size: 13px; }
+  .send { display: flex; gap: 8px; }
+  .send input { font-family: var(--f-mono); font-size: 13px; }
+  .flood { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; background: var(--well); border: 1px solid var(--line); border-radius: 12px; }
+  .flood input { width: 76px; padding: 5px 8px; font-family: var(--f-mono); font-size: 13px; background: var(--panel2); }
 
-  .islands { display: grid; gap: 5px; font-family: var(--f-mono); font-size: 12.5px; }
-  .islands div { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }
-  .islands b { color: var(--ink); font-weight: 500; }
+  /* links */
+  .links { display: grid; gap: 15px; font-size: 13px; color: var(--muted); }
+  .links .k { display: block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-bottom: 5px; }
+  .codes { display: flex; flex-wrap: wrap; gap: 5px; }
+  code { font-family: var(--f-mono); font-size: 13px; color: var(--ink); background: var(--well); border: 1px solid var(--line); border-radius: 7px; padding: 4px 10px; }
+  #overlay-url { display: block; padding: 8px 10px; word-break: break-all; color: var(--fire2); }
+  .linkrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .linkrow a { padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(255,122,47,.35); background: rgba(255,122,47,.06); font-size: 13px; font-weight: 500; }
+  .linkrow a:hover { text-decoration: none; background: rgba(255,122,47,.14); }
+  .linkrow a.alt { border-color: var(--line); background: var(--well); color: var(--ink); }
+  .linkrow a.alt:hover { border-color: var(--line2); }
 
-  #log { font-family: var(--f-mono); font-size: 11.5px; line-height: 1.65; background: #060a15; border: 1px solid var(--line); border-radius: 10px; padding: 10px; height: 230px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+  /* roster */
+  .count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); padding: 2px 9px; border-radius: 999px; background: var(--well); border: 1px solid var(--line); }
+  .count b { color: var(--ink); font-weight: 500; }
+  #roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; max-height: 320px; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+  .ppl { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+  .ppl .pl { font-family: var(--f-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; flex: none; width: 34px; }
+  .ppl .pl.twitch { color: #b388ff; }
+  .ppl .pl.kick { color: #53fc18; }
+  .ppl .pl.local { color: var(--dim); }
+  .ppl .nick { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ppl .ch { font-family: var(--f-mono); font-size: 10.5px; color: var(--dim); flex: none; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; }
+  .ppl .ch.set { color: var(--fire2); border-color: rgba(255,122,47,.3); }
+  #roster .empty { grid-column: 1 / -1; }
+
+  /* log */
+  #log { font-family: var(--f-mono); font-size: 12px; line-height: 1.7; background: #050812; border: 1px solid var(--line); border-radius: 12px; padding: 10px 4px; height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+  #log > div { padding: 0 10px; border-left: 2px solid transparent; }
+  #log > div:hover { background: rgba(255,255,255,.025); }
   #log .t { color: var(--dim); }
-  #log .warn { color: var(--warn); }
-  #log .error { color: var(--bad); }
-  #log .scope { color: #5f8ad0; }
-  code { font-family: var(--f-mono); font-size: 12.5px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
-  .links { font-size: 13px; color: var(--muted); display: grid; gap: 5px; }
+  #log .warn { color: var(--warn); border-left-color: var(--warn); background: rgba(255,211,107,.04); }
+  #log .error { color: var(--bad); border-left-color: var(--bad); background: rgba(255,90,72,.05); }
+  #log .scope { color: var(--blue); }
+  #log .scope::before { content: "["; color: var(--dim); }
+  #log .scope::after { content: "]"; color: var(--dim); }
 </style>
 
 <div class="wrap">
-  <div>
-    <h1>Метеоритный <span>дождь</span> — панель</h1>
-    <div class="sub">Локальный хост <span id="hoststate">подключение…</span> · оверлеев подключено: <b id="overlays">0</b></div>
-  </div>
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Панель стримера</div>
+      <h1>Метеоритный <span>дождь</span></h1>
+    </div>
+    <div class="pills">
+      <div class="pill down" id="hostpill"><i class="dot"></i>Хост: <span id="hoststate">подключение…</span></div>
+      <div class="pill">Оверлеев: <b id="overlays">0</b></div>
+    </div>
+  </header>
 
-  <div class="cards">
-    <div class="card">
-      <h2>Матч</h2>
+  <div class="grid">
+    <section class="card hero">
+      <div class="card-h"><h2>Матч</h2></div>
       <div class="stat">
         <div><b id="s-phase">—</b><small>фаза</small></div>
         <div><b id="s-players">0</b><small>игроков</small></div>
         <div><b id="s-alive">0</b><small>живых</small></div>
         <div><b id="s-timer">—</b><small>до старта</small></div>
       </div>
-      <div class="row">
-        <button id="b-start" class="primary" type="button">Новая игра</button>
-        <button id="b-go" type="button">Старт сейчас</button>
-        <button id="b-reset" type="button">Сброс</button>
-      </div>
-      <div class="row">
-        <label for="winners">Победителей</label>
-        <select id="winners"></select>
+      <div class="controls">
+        <div class="row">
+          <button id="b-start" class="primary" type="button">Новая игра</button>
+          <button id="b-again" type="button" title="Новый сид и новая расстановка опасностей, участники остаются на своих островах">Новый раунд (с игроками)</button>
+          <button id="b-go" type="button">Старт сейчас</button>
+          <button id="b-reset" class="ghost" type="button">Сброс</button>
+        </div>
+        <div class="winners">
+          <label for="winners">Победителей</label>
+          <select id="winners"></select>
+        </div>
       </div>
       <div class="islands" id="islands"></div>
-    </div>
+    </section>
 
-    <div class="card">
-      <h2>Платформы</h2>
+    <section class="card">
+      <div class="card-h"><h2>Платформы</h2></div>
       <div id="platforms"></div>
-      <div class="sub">Чтение работает и без авторизации (Twitch — анонимно). Авторизация нужна, чтобы бот <b>писал</b> в чат.</div>
-    </div>
+      <div class="note">Чтение работает и без авторизации (Twitch — анонимно). Авторизация нужна, чтобы бот <b>писал</b> в чат.</div>
+    </section>
 
-    <div class="card">
-      <h2>Тестовое сообщение</h2>
+    <section class="card">
+      <div class="card-h"><h2>Тестовое сообщение</h2></div>
       <div class="sub">Прогоняет весь путь «чат → роутер → оверлей» без живого чата.</div>
-      <div class="row tight">
+      <div class="field">
         <select id="i-plat"><option value="local">local</option><option value="twitch">twitch</option><option value="kick">kick</option></select>
         <input id="i-nick" class="grow" placeholder="ник" value="tester" size="8">
       </div>
-      <div class="row tight">
+      <div class="send">
         <input id="i-text" class="grow" placeholder="!join 2" value="!join">
-        <button id="b-inject" type="button">Отправить</button>
+        <button id="b-inject" class="primary" type="button">Отправить</button>
       </div>
       <div class="row tight">
-        <button class="sm" data-fill="!join" type="button">!join</button>
-        <button class="sm" data-fill="!join 1" type="button">!join 1</button>
-        <button class="sm" data-fill="!join 2" type="button">!join 2</button>
-        <button class="sm" data-fill="!join 3" type="button">!join 3</button>
-        <button class="sm" data-fill="!meteor go" type="button">!meteor go</button>
+        <button class="chip" data-fill="!join" type="button">!join</button>
+        <button class="chip" data-fill="!join 1" type="button">!join 1</button>
+        <button class="chip" data-fill="!join 2" type="button">!join 2</button>
+        <button class="chip" data-fill="!join 3" type="button">!join 3</button>
+        <button class="chip" data-fill="!meteor go" type="button">!meteor go</button>
       </div>
-      <div class="row tight">
+      <div class="flood">
         <label for="i-n">Пачкой</label>
-        <input id="i-n" type="number" value="25" min="1" max="500" style="width:70px">
+        <input id="i-n" type="number" value="25" min="1" max="500">
         <button id="b-flood" class="sm" type="button">случайных !join</button>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <h2>Ссылки и команды</h2>
+    <section class="card">
+      <div class="card-h"><h2>Ссылки и команды</h2></div>
       <div class="links">
-        <div>OBS Browser Source, 1920×1080:<br><code id="overlay-url">—</code></div>
-        <div style="margin-top:4px">В чате: <code>!join</code> <code>!join 1-3</code></div>
-        <div>Модератор: <code>!meteor start</code> <code>!meteor go</code> <code>!meteor reset</code> <code>!meteor winners N</code></div>
+        <div><span class="k">OBS Browser Source · 1920×1080</span><code id="overlay-url">—</code></div>
+        <div><span class="k">В чате</span><div class="codes"><code>!join</code><code>!join 1-3</code></div></div>
+        <div><span class="k">Модератор</span><div class="codes"><code>!meteor start</code><code>!meteor restart</code><code>!meteor go</code><code>!meteor reset</code><code>!meteor winners N</code></div></div>
       </div>
-      <div class="row">
+      <div class="linkrow">
         <a id="open-overlay" href="/overlay.html" target="_blank">Открыть оверлей ↗</a>
-        <span class="sub">·</span>
-        <a href="/overlay.html?solo=1&amp;bots=300" target="_blank">Демо без чата ↗</a>
+        <a class="alt" href="/overlay.html?solo=1&amp;bots=300" target="_blank">Демо без чата ↗</a>
       </div>
-    </div>
+    </section>
   </div>
 
-  <div class="card">
-    <h2>Лог хоста</h2>
+  <section class="card">
+    <div class="card-h">
+      <h2>Участники</h2>
+      <span class="count">в лобби: <b id="r-count">0</b></span>
+    </div>
+    <div id="roster"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Лог хоста</h2></div>
     <div id="log"></div>
-  </div>
+  </section>
 </div>
 
 <script type="module">
@@ -172,16 +306,28 @@ function renderSession(s) {
   $('s-phase').textContent = PHASE[s.phase] || s.phase || '—';
   $('s-players').textContent = s.players ?? 0;
   $('s-alive').textContent = s.alive ?? 0;
-  $('s-timer').textContent = s.phase === 'lobby' ? `${s.lobbyLeft}s` : '—';
+  // The host holds the clock until minPlayers have joined; say so instead of
+  // showing a frozen number.
+  $('s-timer').textContent = s.phase !== 'lobby' ? '—'
+    : s.waiting ? `ждём ${s.minPlayers}` : `${s.lobbyLeft}s`;
   if (s.winners && $('winners').value !== String(s.winners)) $('winners').value = String(s.winners);
 
   const lobby = s.phase === 'lobby';
   $('b-go').disabled = !lobby;
   $('b-start').textContent = lobby ? 'Перезапустить лобби' : 'Новая игра';
+  // Nothing to keep when the roster is empty.
+  $('b-again').disabled = !(s.players > 0);
 
-  $('islands').innerHTML = (s.islands || []).map(i =>
-    `<div><span>${i.id}. ${i.name} <span class="tag">опасность ${i.danger}</span></span><b>${i.players} → ${i.quota}</b></div>`
-  ).join('') || '<div><span>острова появятся после старта лобби</span></div>';
+  $('islands').innerHTML = (s.islands || []).map(i => {
+    const pct = i.quota ? Math.min(100, Math.round(i.players / Math.max(i.players, i.quota) * 100)) : 0;
+    return `<div class="isl">
+      <div class="isl-top">
+        <span class="isl-name"><span class="isl-n">${i.id}</span>${i.name} <span class="danger d${i.danger}">опасность ${i.danger}</span></span>
+        <b>${i.players}<i>→</i>${i.quota}</b>
+      </div>
+      <div class="bar"><span style="width:${pct}%"></span></div>
+    </div>`;
+  }).join('') || '<div class="empty">острова появятся после старта лобби</div>';
 }
 
 function renderAdapters(a) {
@@ -190,9 +336,9 @@ function renderAdapters(a) {
   $('platforms').innerHTML = Object.entries(PLATFORMS).map(([k, label]) => {
     const d = a[k] || { status: 'off' };
     return `<div class="plat">
-      <div class="row tight" style="justify-content:space-between">
-        <span class="row tight"><i class="dot ${d.status}"></i><span class="name">${label}</span></span>
-        <span class="row tight">
+      <div class="plat-h">
+        <span class="plat-l"><i class="dot ${d.status}"></i><span class="name">${label}</span></span>
+        <span class="plat-r">
           <span class="tag ${d.writable ? 'on' : ''}">${d.writable ? 'чтение+запись' : 'только чтение'}</span>
           ${d.transport === 'relay'
             ? (d.linked
@@ -201,12 +347,37 @@ function renderAdapters(a) {
             : d.authorized
               ? `<button class="sm" data-cmd="logout" data-plat="${k}" type="button">выйти</button>`
               : `<a class="tag" href="/auth/${k}">авторизовать</a>`}
-          <button class="sm" data-cmd="reconnect" data-plat="${k}" type="button">↻</button>
+          <button class="sm" data-cmd="reconnect" data-plat="${k}" type="button" title="Переподключить">↻</button>
         </span>
       </div>
-      <div class="detail">${d.status}${d.detail ? ' — ' + esc(d.detail) : ''}</div>
+      <div class="detail"><span class="st ${d.status}">${d.status}</span>${d.detail ? '<span>' + esc(d.detail) + '</span>' : ''}</div>
     </div>`;
   }).join('');
+}
+
+/* The panel keeps its own copy of the roster: the host sends it once in `hello`
+   and then only the 'join' events, so the once-a-second phase push stays small. */
+const roster = new Map();
+let rosterDirty = false;
+
+function rosterTouch() {
+  if (rosterDirty) return;
+  rosterDirty = true;
+  // A flood lands a hundred joins in one frame; coalesce them into one repaint.
+  requestAnimationFrame(renderRoster);
+}
+
+function renderRoster() {
+  rosterDirty = false;
+  $('r-count').textContent = roster.size;
+  $('roster').innerHTML = [...roster.values()].map(p => {
+    const plat = p.platform === 'twitch' || p.platform === 'kick' ? p.platform : 'local';
+    return `<div class="ppl">
+      <span class="pl ${plat}">${plat}</span>
+      <span class="nick">${esc(p.display || p.key)}</span>
+      <span class="ch${p.choice ? ' set' : ''}">${p.choice ? '№' + p.choice : 'авто'}</span>
+    </div>`;
+  }).join('') || '<div class="empty">пока никто не написал !join</div>';
 }
 
 const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
@@ -231,11 +402,19 @@ connect('control', m => {
     renderSession(m.session);
     renderAdapters(m.adapters);
     (m.log || []).forEach(addLog);
+    roster.clear();
+    for (const p of m.roster || []) roster.set(p.key, p);
+    rosterTouch();
   } else if (m.t === 'phase') renderSession(m.session);
   else if (m.t === 'status') renderAdapters(m.adapters);
   else if (m.t === 'log') addLog(m.rec);
+  else if (m.t === 'join') { roster.set(m.key, m); rosterTouch(); }
+  // A new lobby and a reset both empty the host roster; mirror that here.
+  // A restart with `keep` does not — the host replays the kept players as joins.
+  else if (m.t === 'cmd' && ((m.name === 'start' && !m.keep) || m.name === 'reset')) { roster.clear(); rosterTouch(); }
 }, s => {
   $('hoststate').textContent = s === 'connected' ? 'на связи' : 'переподключение…';
+  $('hostpill').className = 'pill ' + (s === 'connected' ? 'up' : 'down');
 });
 
 async function refresh() {
@@ -250,6 +429,7 @@ setInterval(refresh, 4000);
 const cmd = (name, extra) => post('/api/cmd', Object.assign({ name }, extra));
 
 $('b-start').onclick = () => cmd('start');
+$('b-again').onclick = () => cmd('start', { keep: true });
 $('b-go').onclick = () => cmd('go');
 $('b-reset').onclick = () => cmd('reset');
 $('winners').onchange = e => cmd('winners', { value: +e.target.value });
