@@ -5,7 +5,9 @@
    the right local host over a connection that host opened itself.
 
    Streamers configure nothing: their local host dials in, they click one link to
-   authorize Kick, and the binding is remembered.
+   authorize Kick, and the binding is remembered. A streamer who has no access to
+   the channel account instead claims the channel by slug — the relay subscribes
+   with its own app token, read-only. See /agent/claim.
 
    Run:  node relay/index.mjs        (config in relay.config.json or env) */
 import { createServer } from 'node:http';
@@ -22,6 +24,7 @@ import {
 import {
   kickPublicKey, verifySignature, beginAuth, exchangeCode, missingScopes,
   whoAmI, channelOf, subscribeChat, unsubscribe, sendChat, normalizeChat, broadcasterOf,
+  resolveChannel, subscribeChatAsApp, unsubscribeAsApp,
 } from './kick.mjs';
 
 const log = logger('relay');
@@ -177,10 +180,54 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, url: `${cfg.publicUrl}/link/${code}`, expiresInMs: LINK_TTL });
     }
 
+    /* --- agent claims a channel by slug, with no authorization from its owner ---
+
+       Verified live: an app access token subscribes to chat.message.sent for any
+       broadcaster_user_id. This is the path for a streamer who works on someone
+       else's channel and cannot click through OAuth there. Read-only: posting to
+       chat still needs the owner's token, so /agent/say stays closed in this mode. */
+    if (req.method === 'POST' && p === '/agent/claim') {
+      const { agent } = requireAgent(req);
+      if (!agent) return json(res, 401, { ok: false, error: 'bad agent credentials' });
+
+      const body = await readJson(req).catch(() => ({}));
+      let ch;
+      try { ch = await resolveChannel(cfg, body.slug); }
+      catch (e) { return json(res, 400, { ok: false, error: e.message }); }
+
+      // An owner-authorized binding is strictly better; never downgrade it silently.
+      if (agent.tokens && Number(agent.broadcasterUserId) === ch.broadcasterUserId) {
+        return json(res, 200, { ok: true, agent: publicAgent(agent), note: 'already linked via OAuth' });
+      }
+
+      try {
+        // Переезд на другой канал: подписку на прежний надо снять, иначе Kick
+        // продолжит слать по ней события, которые уже некому отдать.
+        if (agent.subscriptionId && Number(agent.broadcasterUserId) !== ch.broadcasterUserId) {
+          if (agent.tokens) await unsubscribe(cfg, agent, agent.subscriptionId);
+          else await unsubscribeAsApp(cfg, agent.subscriptionId);
+        }
+        const bound = bindBroadcaster(agent.id, ch.broadcasterUserId, ch.slug, null, 'app');
+        if (!bound) return json(res, 500, { ok: false, error: 'агент не найден' });
+        const subId = await subscribeChatAsApp(cfg, ch.broadcasterUserId);
+        setSubscription(bound.id, subId);
+        log.info(`claimed ${ch.slug} (${ch.broadcasterUserId}) -> agent ${bound.id} [app token, read-only]`);
+        const pub = publicAgent(getAgent(bound.id));
+        hub.send(bound.id, { t: 'status', agent: pub });
+        return json(res, 200, { ok: true, agent: pub });
+      } catch (e) {
+        log.error(`claim failed for ${ch.slug}: ${e.message}`);
+        return json(res, 502, { ok: false, error: e.message });
+      }
+    }
+
     if (req.method === 'POST' && p === '/agent/unlink') {
       const { agent } = requireAgent(req);
       if (!agent) return json(res, 401, { ok: false, error: 'bad agent credentials' });
-      if (agent.tokens && agent.subscriptionId) await unsubscribe(cfg, agent, agent.subscriptionId);
+      if (agent.subscriptionId) {
+        if (agent.tokens) await unsubscribe(cfg, agent, agent.subscriptionId);
+        else await unsubscribeAsApp(cfg, agent.subscriptionId);
+      }
       unlink(agent.id);
       hub.send(agent.id, { t: 'status', agent: publicAgent(getAgent(agent.id)) });
       return json(res, 200, { ok: true });
@@ -190,7 +237,14 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/agent/say') {
       const { agent } = requireAgent(req);
       if (!agent) return json(res, 401, { ok: false, error: 'bad agent credentials' });
-      if (!agent.tokens) return json(res, 409, { ok: false, error: 'not linked' });
+      if (!agent.tokens) {
+        return json(res, 409, {
+          ok: false,
+          error: agent.mode === 'app'
+            ? 'канал привязан без авторизации владельца — бот может только читать чат'
+            : 'not linked',
+        });
+      }
       const body = await readJson(req);
       const text = String(body.text || '').slice(0, 400);
       if (!text) return json(res, 400, { ok: false, error: 'empty text' });
@@ -275,8 +329,11 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && (p === '/' || p === '/status')) {
       const agents = allAgents().map(a => ({ ...publicAgent(a), online: hub.online(a.id) }));
       if (p === '/status') return json(res, 200, { ok: true, online: hub.count(), agents, log: recent(40) });
+      const label = a => !a.linked ? 'нет'
+        : a.mode === 'app' ? 'привязан (только чтение)'
+        : 'привязан';
       const rows = agents.map(a =>
-        `<tr><td>${a.channel || '—'}</td><td>${a.linked ? 'привязан' : 'нет'}</td><td>${a.online ? 'онлайн' : 'офлайн'}</td></tr>`).join('');
+        `<tr><td>${a.channel || '—'}</td><td>${label(a)}</td><td>${a.online ? 'онлайн' : 'офлайн'}</td></tr>`).join('');
       return send(res, 200, 'text/html; charset=utf-8', page('Meteor relay',
         `Подключено агентов: <b>${hub.count()}</b><table style="margin:14px auto;border-collapse:collapse">
          <tr><th style="padding:4px 12px">канал</th><th style="padding:4px 12px">Kick</th><th style="padding:4px 12px">хост</th></tr>

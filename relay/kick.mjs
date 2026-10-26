@@ -9,9 +9,11 @@ import { setTokens } from './store.mjs';
 
 const log = logger('kick');
 
-const API = 'https://api.kick.com/public/v1';
+/* Test hooks: point the relay at a stand-in Kick so the suite never touches the
+   live API. Unset in production, which is the only configuration that matters. */
+const API = process.env.KICK_API_BASE || 'https://api.kick.com/public/v1';
 const AUTHORIZE = 'https://id.kick.com/oauth/authorize';
-const TOKEN_URL = 'https://id.kick.com/oauth/token';
+const TOKEN_URL = process.env.KICK_TOKEN_URL || 'https://id.kick.com/oauth/token';
 
 /* Verified live: the app's scopes must grant all of these or /events/subscriptions
    answers a bare 401 with no hint about what is missing. */
@@ -95,6 +97,98 @@ export async function exchangeCode(cfg, code, verifier) {
     expiresAt: Date.now() + (j.expires_in || 3600) * 1000,
     scope: j.scope,
   };
+}
+
+/* ---------- app access token ----------
+
+   Verified live against Kick: a client_credentials token may subscribe to
+   chat.message.sent for ANY channel, given that channel's broadcaster_user_id —
+   documented under Events ("App access tokens allow you to subscribe to events
+   from any channel given you supply the user ID of that channel").
+
+   That is what lets a streamer who has no access to the channel account still
+   run the game: the relay subscribes on its own authority and only needs the
+   channel slug. Reading only — see sendChat for why writing still needs OAuth. */
+
+let appTokenCache = null;    // { token, expiresAt }
+
+export async function appToken(cfg) {
+  if (appTokenCache && appTokenCache.expiresAt - Date.now() > 60000) return appTokenCache.token;
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: cfg.clientId,
+    client_secret: cfg.clientSecret,
+  });
+  const r = await fetch(TOKEN_URL, { method: 'POST', body });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`app token -> ${r.status} ${text.slice(0, 200)}`);
+  const j = JSON.parse(text);
+  if (!j.access_token) throw new Error('app token response had no token');
+  // Kick hands out a long-lived token (60 days when verified); cache it anyway so
+  // a burst of claims is one round trip.
+  appTokenCache = { token: j.access_token, expiresAt: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  return appTokenCache.token;
+}
+
+async function appApi(cfg, path, init = {}) {
+  const token = await appToken(cfg);
+  const r = await fetch(API + path, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      accept: 'application/json',
+      ...(init.headers || {}),
+    },
+  });
+  const text = await r.text();
+  if (!r.ok) throw Object.assign(new Error(`${path} -> ${r.status} ${text.slice(0, 300)}`), { status: r.status });
+  return text ? JSON.parse(text) : null;
+}
+
+/* Slug -> broadcaster id, over public data. No consent from the channel needed,
+   which is precisely the point and also the thing to gate before opening the
+   relay to strangers (see README). */
+export async function resolveChannel(cfg, slug) {
+  const clean = String(slug || '').trim().toLowerCase().replace(/^@/, '');
+  if (!/^[a-z0-9_-]{1,64}$/.test(clean)) throw new Error('слаг канала выглядит неправильно');
+  const j = await appApi(cfg, `/channels?slug=${encodeURIComponent(clean)}`);
+  const row = ((j || {}).data || [])[0];
+  const bid = row && (row.broadcaster_user_id || row.user_id);
+  if (!bid) throw new Error(`канал "${clean}" на Kick не найден`);
+  return { slug: row.slug || clean, broadcasterUserId: Number(bid) };
+}
+
+/* Same shape as subscribeChat, but on the relay's own authority. */
+export async function subscribeChatAsApp(cfg, broadcasterUserId) {
+  try {
+    const existing = await appApi(cfg, '/events/subscriptions');
+    for (const s of ((existing || {}).data || [])) {
+      if (s.event === 'chat.message.sent' && Number(s.broadcaster_user_id) === Number(broadcasterUserId)) {
+        await appApi(cfg, `/events/subscriptions?id=${encodeURIComponent(s.id)}`, { method: 'DELETE' });
+      }
+    }
+  } catch (e) {
+    log.warn(`could not clean old app subscriptions for ${broadcasterUserId}: ${e.message}`);
+  }
+
+  const created = await appApi(cfg, '/events/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      method: 'webhook',
+      broadcaster_user_id: Number(broadcasterUserId),
+      events: [{ name: 'chat.message.sent', version: 1 }],
+    }),
+  });
+  const row = ((created && created.data) || [])[0] || {};
+  if (row.error) throw new Error(`subscription refused: ${row.error}`);
+  return row.subscription_id || row.id || null;
+}
+
+export async function unsubscribeAsApp(cfg, subscriptionId) {
+  if (!subscriptionId) return;
+  try { await appApi(cfg, `/events/subscriptions?id=${encodeURIComponent(subscriptionId)}`, { method: 'DELETE' }); }
+  catch (e) { log.warn(`app unsubscribe failed: ${e.message}`); }
 }
 
 async function refresh(cfg, agent) {

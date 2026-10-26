@@ -122,12 +122,13 @@
   .plat .st.error { color: var(--bad); }
   .plat .name { font-size: 17px; }
   .plat-r button.sm { padding: 7px 13px; font-size: 13.5px; }
+  .plat-r input.claim { padding: 6px 10px; font-size: 13px; border-radius: 8px; width: 11ch; }
   .plat-r .tag { font-size: 12px; padding: 6px 11px; border-radius: 8px; }
   .plat { display: grid; gap: 8px; padding: 12px 14px; background: var(--well); border: 1px solid var(--line); border-radius: 12px; }
   .plat .name { font-weight: 600; font-size: 15px; white-space: nowrap; }
   .plat-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .plat-l { display: flex; align-items: center; gap: 9px; flex: none; }
-  .plat-r { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; margin-left: auto; }
+  .plat-r { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
   .plat .detail { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); word-break: break-word; padding-top: 8px; border-top: 1px solid var(--line); }
   .tag { font-family: var(--f-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .tag.on { color: var(--ok); border-color: rgba(127,240,196,.35); background: rgba(127,240,196,.06); }
@@ -343,7 +344,10 @@ function renderAdapters(a) {
           ${d.transport === 'relay'
             ? (d.linked
                 ? `<button class="sm" data-cmd="unlink" data-plat="${k}" type="button">отвязать</button>`
-                : `<button class="sm primary" data-link="${k}" type="button">Подключить ${label}</button>`)
+                : `<button class="sm primary" data-link="${k}" type="button">Подключить ${label}</button>
+                   <input class="claim" data-claim-slug="${k}" type="text" placeholder="ник канала" size="12"
+                          value="${esc(d.channel || d.wantChannel || '')}" title="Привязать канал без авторизации владельца — только чтение чата">
+                   <button class="sm" data-claim="${k}" type="button" title="Подписаться на чат этого канала без авторизации владельца. Бот сможет только читать.">привязать по нику</button>`)
             : d.authorized
               ? `<button class="sm" data-cmd="logout" data-plat="${k}" type="button">выйти</button>`
               : `<a class="tag" href="/auth/${k}">авторизовать</a>`}
@@ -439,6 +443,22 @@ document.addEventListener('click', e => {
   if (b) cmd(b.dataset.cmd, { platform: b.dataset.plat }).then(refresh);
   const f = e.target.closest('[data-fill]');
   if (f) { $('i-text').value = f.dataset.fill; inject(); }
+
+  const c = e.target.closest('[data-claim]');
+  if (c) {
+    const k = c.dataset.claim;
+    const field = document.querySelector(`[data-claim-slug="${k}"]`);
+    const slug = (field && field.value.trim()) || '';
+    if (!slug) { alert('Впишите ник канала на Kick.'); return; }
+    c.disabled = true;
+    // Привязка без авторизации владельца: релей подписывается своим токеном,
+    // поэтому бот сможет только читать чат.
+    post('/api/cmd', { name: 'claim', platform: k, value: slug }).then(r => {
+      c.disabled = false;
+      if (!r.ok) alert('Не удалось привязать канал: ' + (r.error || 'неизвестная ошибка'));
+      refresh();
+    });
+  }
 
   const l = e.target.closest('[data-link]');
   if (l) {

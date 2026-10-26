@@ -3,7 +3,13 @@
    An agent is a streamer's local host. It owns a long-lived id/key pair it
    generated itself; the relay learns the key the first time it sees the id and
    refuses it afterwards from anyone else. Kick tokens are stored per broadcaster
-   and never leave this process. */
+   and never leave this process.
+
+   A binding comes in two modes. 'oauth' — the channel owner authorized Kick, so
+   we hold their tokens and the bot can write to chat. 'app' — nobody authorized
+   anything; the relay subscribed with its own app access token, which Kick allows
+   for any channel. The second mode is read-only and exists for streamers who have
+   no access to the account of the channel they stream on. */
 import { readFileSync, writeFileSync, existsSync, renameSync, chmodSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -67,9 +73,10 @@ export function authAgent(agentId, key) {
 
 export function getAgent(agentId) { return load().agents[agentId] || null; }
 
-/* Binds a Kick account to an agent. One broadcaster maps to exactly one agent:
-   re-linking from a new machine moves the binding rather than duplicating it. */
-export function bindBroadcaster(agentId, broadcasterUserId, channel, tokens) {
+/* Binds a Kick channel to an agent. One broadcaster maps to exactly one agent:
+   re-linking from a new machine moves the binding rather than duplicating it.
+   `tokens` is absent in 'app' mode — there is no streamer token to keep. */
+export function bindBroadcaster(agentId, broadcasterUserId, channel, tokens, mode = 'oauth') {
   const s = load();
   const a = s.agents[agentId];
   if (!a) return null;
@@ -81,9 +88,16 @@ export function bindBroadcaster(agentId, broadcasterUserId, channel, tokens) {
     s.agents[previous].channel = '';
   }
 
+  // Этот агент мог быть привязан к другому каналу. Без снятия старой записи
+  // релей продолжал бы маршрутизировать ему чат прежнего канала.
+  const was = Number(a.broadcasterUserId || 0);
+  if (was && was !== Number(broadcasterUserId)) delete s.byBroadcaster[String(was)];
+
   a.broadcasterUserId = Number(broadcasterUserId);
   a.channel = channel || '';
-  a.tokens = tokens;
+  a.mode = mode;
+  if (tokens) a.tokens = tokens;
+  else delete a.tokens;
   a.linkedAt = Date.now();
   s.byBroadcaster[bid] = agentId;
   flush();
@@ -112,6 +126,7 @@ export function unlink(agentId) {
   a.channel = '';
   delete a.tokens;
   delete a.subscriptionId;
+  delete a.mode;
   flush();
 }
 
@@ -125,11 +140,15 @@ export function setSubscription(agentId, subscriptionId) {
 /* Safe to log or expose: carries no tokens. */
 export function publicAgent(a) {
   if (!a) return null;
+  const mode = a.mode || (a.tokens ? 'oauth' : '');
   return {
     id: a.id,
     channel: a.channel || '',
     broadcasterUserId: a.broadcasterUserId || 0,
-    linked: !!a.tokens,
+    mode,
+    linked: !!a.tokens || (mode === 'app' && !!a.broadcasterUserId),
+    // Only an owner-authorized token can post to the channel's chat.
+    writable: !!a.tokens,
     linkedAt: a.linkedAt || null,
     subscriptionId: a.subscriptionId || null,
   };

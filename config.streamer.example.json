@@ -16,6 +16,8 @@
   "kick": {
     "enabled": true,
     "transport": "relay",
-    "relayUrl": "https://relay.cigilvpn.store"
+    "relayUrl": "https://relay.cigilvpn.store",
+
+    "channel": ""
   }
 }

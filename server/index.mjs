@@ -176,6 +176,16 @@ const server = createServer(async (req, res) => {
           try { return json(res, 200, { ok: true, url: await a.linkUrl() }); }
           catch (e) { return json(res, 502, { ok: false, error: e.message }); }
         }
+        /* Relay transport: bind a channel by slug, with no owner authorization.
+           Read-only — see relay/index.mjs /agent/claim. */
+        case 'claim': {
+          const a = adapters.get(b.platform || 'kick');
+          if (!a || typeof a.claim !== 'function') return json(res, 400, { ok: false, error: 'this transport has no claim flow' });
+          const slug = String(b.value || '').trim();
+          if (!slug) return json(res, 400, { ok: false, error: 'нужен слаг канала' });
+          try { return json(res, 200, { ok: true, agent: await a.claim(slug) }); }
+          catch (e) { return json(res, 502, { ok: false, error: e.message }); }
+        }
         case 'unlink': {
           const a = adapters.get(b.platform || 'kick');
           if (a && typeof a.unlink === 'function') await a.unlink();
