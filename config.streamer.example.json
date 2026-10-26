@@ -1,23 +1,11 @@
 {
-  "game": {
-    "lobbySeconds": 45,
-    "minPlayers": 2,
-    "winners": 1,
-    "autoStart": true
-  },
-
-  "replies": "minimal",
-
   "twitch": {
-    "enabled": true,
     "channel": "ВАШ_НИК_НА_TWITCH"
   },
 
   "kick": {
-    "enabled": true,
     "transport": "relay",
     "relayUrl": "https://relay.cigilvpn.store",
-
-    "channel": ""
+    "channel": "НИК_КАНАЛА_НА_KICK"
   }
 }
