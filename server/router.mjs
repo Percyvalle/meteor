@@ -50,6 +50,7 @@ export class CommandRouter {
     if (!this.buckets.take(m.key)) { this.dropped.rateUser++; return; }
 
     if (verb === C.join) {
+      if (!this.allowed(m.roles, C.joinRoles)) { this.dropped.perms++; return; }
       let choice = 0;
       if (arg) {
         const n = parseInt(arg, 10);

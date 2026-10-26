@@ -146,11 +146,16 @@ export class Session {
   join(p) {
     const prev = this.roster.get(p.key);
     if (prev && prev.choice === p.choice) return;       // same request twice, nothing to do
-    // `island` is where the overlay actually seated them; it survives a re-join
-    // until the next joinResult corrects it, so a restart never loses the seat.
+    // `island` — только подтверждённое оверлеем место; оно переживает перезаход
+    // и возвращает игрока на тот же остров при !meteor restart. Выбор из чата
+    // сюда не пишем: !join 2, который оверлей отклонил (например, пришёл уже
+    // после старта), иначе оставил бы хост в уверенности, что игрок стоит на
+    // втором острове, хотя в симуляции он на первом.
     this.roster.set(p.key, {
       key: p.key, display: p.display, platform: p.platform, choice: p.choice,
-      island: p.choice || (prev ? prev.island : 0) || 0,
+      island: (prev ? prev.island : 0) || 0,
+      // Оверлей подтвердил посадку хотя бы раз — см. joinResult ниже.
+      seated: prev ? !!prev.seated : false,
     });
     this.hub.send({ t: 'join', key: p.key, display: p.display, platform: p.platform, choice: p.choice });
   }
@@ -185,10 +190,15 @@ export class Session {
       case 'kill':
         if (this.cfg.replies === 'verbose') this.outbox.announce('kill', m);
         break;
+      /* Отказ оверлея значит «в лобби такого места нет» — но только для тех,
+         кого там ещё не было. Фазу хост отражает с задержкой в один отчёт, так
+         что !join, отправленный в момент старта, доедет до уже стартовавшего
+         оверлея и вернётся отказом. Удалять по нему сидящего игрока нельзя: он
+         остался бы в симуляции, но исчез из ростера — и из !meteor restart. */
       case 'joinResult': {
-        if (!m.ok) { this.roster.delete(m.key); break; }
         const e = this.roster.get(m.key);
-        if (e && m.island) e.island = m.island;
+        if (!m.ok) { if (e && !e.seated) this.roster.delete(m.key); break; }
+        if (e) { e.seated = true; if (m.island) e.island = m.island; }
         break;
       }
       case 'newgame':

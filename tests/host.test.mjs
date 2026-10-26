@@ -194,6 +194,54 @@ for (const [path, want] of [['/overlay.html', 200], ['/control.html', 200], ['/j
 const esc = await fetch(BASE + '/js/%2e%2e/%2e%2e/package.json');
 check('path traversal is blocked', esc.status === 404 || esc.status === 403, `got ${esc.status}`);
 
+/* ---- доступ к хосту: только своя машина ----
+
+   С transport "webhook" стример выставляет этот порт туннелем в интернет, и
+   тогда чужой Host — это зритель, нашедший адрес. Ему нельзя ни панель, ни
+   /api/state (там живой сид лобби), ни inject с правами ведущего. Заголовок
+   Host через fetch не подменить, поэтому запрос собираем вручную. */
+import { request } from 'node:http';
+
+function raw(method, path, { host, origin, body } = {}) {
+  const u = new URL(BASE + path);
+  return new Promise((ok, fail) => {
+    const headers = { 'content-type': 'application/json' };
+    if (host) headers.Host = host;
+    if (origin) headers.Origin = origin;
+    const req = request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers }, res => {
+      let t = ''; res.on('data', c => t += c); res.on('end', () => ok({ status: res.statusCode, text: t }));
+    });
+    req.on('error', fail);
+    if (body !== undefined) req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
+for (const [path, method, body] of [
+  ['/api/state', 'GET', undefined],
+  ['/api/cmd', 'POST', { name: 'reset' }],
+  ['/api/chat/inject', 'POST', { platform: 'twitch', userId: 'x', display: 'x', text: '!meteor go' }],
+  ['/api/report', 'POST', { type: 'win', list: [{ display: 'cheater' }] }],
+  ['/events', 'GET', undefined],
+  ['/control.html', 'GET', undefined],
+]) {
+  const r = await raw(method, path, { host: 'meteor.trycloudflare.com', body });
+  check(`туннельный Host отбит: ${method} ${path}`, r.status === 403, `got ${r.status}`);
+}
+const okHost = await raw('GET', '/api/state', { host: '127.0.0.1:' + new URL(BASE).port });
+check('своя машина проходит', okHost.status === 200, `got ${okHost.status}`);
+
+// Ссылка из чата, по которой перешёл стример: Host свой, Origin чужой.
+const csrf = await raw('POST', '/api/cmd', { origin: 'https://clips.example', body: { name: 'reset' } });
+check('POST с чужим Origin отбит (ссылка из чата)', csrf.status === 403, `got ${csrf.status}`);
+const sameOrigin = await raw('POST', '/api/cmd', { origin: BASE, body: { name: 'winners', value: 2 } });
+check('свой Origin проходит', sameOrigin.status === 200, `got ${sameOrigin.status}`);
+
+// Вебхук Kick — единственный маршрут снаружи; без подписи он отбивается уже
+// адаптером, но не приглашением «forbidden».
+const hook = await raw('POST', '/webhooks/kick', { host: 'meteor.trycloudflare.com', body: {} });
+check('вебхук Kick снаружи не блокируется заголовком Host', hook.status !== 403, `got ${hook.status}`);
+
 /* ---- malformed input ---- */
 const bad = await fetch(BASE + '/api/cmd', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{nope' });
 check('invalid JSON is a 500/400, not a crash', bad.status >= 400 && bad.status < 600, `got ${bad.status}`);

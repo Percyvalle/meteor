@@ -127,6 +127,39 @@ function readBody(req, limit = 64 * 1024) {
   });
 }
 
+/* ---------- who may drive the host ---------- */
+
+/* Всё, кроме вебхука Kick, обслуживается только для своей машины.
+   Причина не теоретическая: с transport "webhook" стример выставляет этот порт
+   в интернет туннелем (README), и тогда любой, кто узнал адрес, получает полную
+   панель — /api/cmd, /api/chat/inject с правами ведущего и /api/state, где лежит
+   живой сид текущего лобби. Проверяем Host, а не адрес клиента: туннель ходит
+   через локальный cloudflared, с точки зрения сокета он неотличим от панели.
+   Заодно это закрывает DNS rebinding, а проверка Origin — переход стримера по
+   ссылке из чата, которая иначе молча постучится на 127.0.0.1. */
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+function hostAllowed(value) {
+  if (!value) return false;
+  // Host приходит как "хост:порт"; у IPv6 хост в квадратных скобках.
+  const h = String(value).trim().toLowerCase();
+  const name = h.startsWith('[') ? h.slice(0, h.indexOf(']') + 1) : h.split(':')[0];
+  if (LOOPBACK.has(name)) return true;
+  // Стример мог сознательно поднять хост на LAN-адресе, чтобы оверлей крутился
+  // на другой машине — тогда его собственный host из конфига тоже свой.
+  if (cfg.host && name === String(cfg.host).toLowerCase() && !['0.0.0.0', '::'].includes(cfg.host)) return true;
+  return Array.isArray(cfg.allowedHosts) && cfg.allowedHosts.some(a => String(a).toLowerCase() === name);
+}
+
+function originAllowed(value) {
+  if (!value || value === 'null') return true;     // обычный fetch со своей же страницы Origin не шлёт
+  try { return hostAllowed(new URL(value).host); } catch { return false; }
+}
+
+function isLocalRequest(req) {
+  return hostAllowed(req.headers.host) && originAllowed(req.headers.origin);
+}
+
 /* ---------- http ---------- */
 
 const server = createServer(async (req, res) => {
@@ -134,6 +167,13 @@ const server = createServer(async (req, res) => {
   const p = url.pathname;
 
   try {
+    /* Вебхук Kick — единственный маршрут, которому положено приходить снаружи:
+       подпись события проверяет сам адаптер. */
+    if (p !== '/webhooks/kick' && !isLocalRequest(req)) {
+      log.warn(`отклонён внешний запрос ${req.method} ${p} (host=${req.headers.host || '-'}${req.headers.origin ? ', origin=' + req.headers.origin : ''})`);
+      return send(res, 403, 'text/plain', 'forbidden: host only serves 127.0.0.1');
+    }
+
     if (req.method === 'GET' && p === '/events') {
       const role = url.searchParams.get('role') === 'overlay' ? 'overlay' : 'control';
       const hello = role === 'overlay'

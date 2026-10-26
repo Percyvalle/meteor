@@ -1,5 +1,6 @@
 {
   "port": 7777,
+  "allowedHosts": [],
 
   "game": {
     "lobbySeconds": 45,
@@ -13,7 +14,8 @@
 
   "commands": {
     "adminRoles": ["broadcaster", "mod"],
-    "islandChoiceRoles": ["everyone"]
+    "islandChoiceRoles": ["everyone"],
+    "joinRoles": ["everyone"]
   },
 
   "twitch": {

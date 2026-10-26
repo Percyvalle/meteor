@@ -370,7 +370,14 @@ function drawHUD(now, dt) {
   ctx.textAlign = 'left'; ctx.fillStyle = C.ink; ctx.font = `26px ${F_DISP}`;
   spaced(ctx, 'МЕТЕОРИТНЫЙ ДОЖДЬ', 48, 66, 2, 'left');
   ctx.fillStyle = C.muted; ctx.font = `500 15px ${F_MONO}`;
-  ctx.fillText(`сид ${game.seed.toString(16).toUpperCase().padStart(8, '0')}  ·  победителей: ${game.winnersN}`, 48, 92);
+  // Сид не показываем до обратного отсчёта. Опасность островов — чистая функция
+  // (сид, число победителей) и роллится ещё в конструкторе, так что сид на экране
+  // в лобби сводит на нет всю надпись «ОПАСНОСТЬ: СКРЫТА»: зритель с копией игры
+  // считает уровни мгновенно и идёт на тихий остров. После отсчёта уровни и так
+  // открыты, а !join уже не принимается — там сид снова полезен для проверки.
+  const seedShown = ph !== 'idle' && ph !== 'lobby';
+  ctx.fillText((seedShown ? `сид ${game.seed.toString(16).toUpperCase().padStart(8, '0')}  ·  ` : '')
+    + `победителей: ${game.winnersN}`, 48, 92);
   if (ph !== 'idle' && ph !== 'lobby') {
     const N = game.startCount, a = game.alive;
     const label = ph === 'final' || ph === 'won' ? 'ФИНАЛ · В ИГРЕ' : ph === 'transfer' ? 'ФИНАЛИСТОВ' : 'ОТБОР · В ИГРЕ';

@@ -11,6 +11,11 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULTS = {
   port: 7777,
   host: '127.0.0.1',
+  // Хост обслуживает только свою машину (проверка заголовка Host). Сюда можно
+  // дописать имена, под которыми вы открываете панель или оверлей сами — напр.
+  // LAN-адрес машины с OBS. Публичный адрес туннеля сюда вписывать нельзя:
+  // он открывает панель всему интернету, см. комментарий в server/index.mjs.
+  allowedHosts: [],
 
   game: {
     lobbySeconds: 45,       // how long the lobby accepts !join
@@ -27,6 +32,10 @@ const DEFAULTS = {
     // who may run admin commands / pick an island
     adminRoles: ['broadcaster', 'mod'],
     islandChoiceRoles: ['everyone'],   // e.g. ['broadcaster','mod','vip','sub'] to gate it
+    // Кто вообще может играть. Единственная защита от фермы альтов: одна
+    // личность занимает одно место, но завести второй аккаунт на Twitch ничего
+    // не стоит. ['sub','vip','mod','broadcaster'] делает это платным.
+    joinRoles: ['everyone'],
   },
 
   limits: {
