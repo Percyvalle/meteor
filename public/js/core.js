@@ -63,6 +63,32 @@ class Game {
 
   quotaSum() { return this.islands.reduce((s, i) => s + (i.id < 3 ? i.quota : 0), 0); }
 
+  // Quotas above are absolute numbers tuned for a crowd. With a small roster an island
+  // can start at or below its quota, and then the director has nothing to do: spawnAcc is
+  // zeroed every frame and meteors in the air are purged, so the whole qualifier runs
+  // empty whatever the danger level. Pull each quota under the island's own headcount so
+  // every populated island still has someone to cull, keeping enough survivors for the
+  // final. Crowds are untouched: there quota is already well below the headcount.
+  fitQuotas() {
+    const live = this.islands.filter(i => i.id < 3 && i.n > 0);
+    if (!live.length) return;                       // no roster yet: base quotas stand
+    // Never below 1: a populated island showing "пройдут 0" dooms whoever stands on it no
+    // matter how well they play, and a lone player could not be culled without emptying the
+    // island anyway. Such an island is simply already at quota, so it closes at once.
+    for (const isl of live) isl.quota = clamp(Math.min(isl.quota, isl.n - 1), 1, isl.n);
+    const sum = () => live.reduce((s, i) => s + i.quota, 0);
+    const floor = Math.min(this.winnersN + 1, live.reduce((s, i) => s + i.n, 0));
+    for (let g = 0; g < 60 && sum() < floor; g++) {
+      // Raising a quota up to the island's headcount gives it a free pass, so spend those
+      // raises on the thinnest islands first: a lone player could not be culled without
+      // emptying the island anyway, while a two-player island still has a real round to play.
+      let best = null;
+      for (const isl of live) if (isl.quota < isl.n && (!best || isl.n < best.n || (isl.n === best.n && isl.n - isl.quota > best.n - best.quota))) best = isl;
+      if (!best) break;
+      best.quota++;
+    }
+  }
+
   rollDanger() {
     for (let k = 0; k < 50; k++) {
       for (const isl of this.islands) if (isl.id < 3) isl.danger = 1 + Math.floor(this.rng() * 3);
@@ -71,6 +97,7 @@ class Game {
       if (lv.size >= 2 && this.quotaSum() >= this.winnersN + 2) break;
     }
     for (const isl of this.islands) if (isl.id < 3) isl.hails = isl.prof.hail.concat(DANGER[isl.danger].hails).sort((a, b) => a - b);
+    this.fitQuotas();
   }
 
   setWinners(n) {
@@ -78,6 +105,7 @@ class Game {
     this.winnersN = clamp(n | 0, 1, 20);
     this.computeQuotas();
     if (this.quotaSum() < this.winnersN + 2) this.rollDanger();
+    else this.fitQuotas();
   }
 
   buildIsland(id, L, rising) {
@@ -170,6 +198,7 @@ class Game {
       this.islands[old.island].n--; this.islands[old.island].alive--;
       old.island = target; this.islands[target].n++; this.islands[target].alive++;
       this.placeOn(old, this.islands[target]);
+      this.computeQuotas(); this.fitQuotas();
       this.events.push({ type: 'move', p: old });
       return old;
     }
@@ -184,6 +213,7 @@ class Game {
     this.players.push(p); this.byKey.set(k, p);
     this.islands[target].n++; this.islands[target].alive++;
     this.alive++;
+    this.computeQuotas(); this.fitQuotas();
     this.events.push({ type: 'join', p });
     return p;
   }
@@ -203,6 +233,7 @@ class Game {
     if (this.winnersN >= this.alive) this.winnersN = this.alive - 1;
     this.phase = 'countdown'; this.cd = 3; this.startCount = this.alive;
     for (const isl of this.islands) { isl.n0 = isl.n; isl.alive = isl.n; if (isl.n0 === 0) isl.done = true; }
+    this.computeQuotas(); this.fitQuotas();
     this.events.push({ type: 'countdown' });
     return true;
   }
@@ -386,7 +417,14 @@ class Game {
     if (P.glacier) {
       const tS = Math.min(1.03 - 0.8 * clamp((gt - 3) / 40, 0, 1), tp + 0.05);
       if (tS < isl.sinkS) isl.sinkS = Math.max(tS, isl.sinkS - 0.055 * dt);
-    } else if (gt > 8 && tp < isl.sinkS) isl.sinkS = Math.max(tp, isl.sinkS - 0.035 * dt);
+    } else {
+      // tp alone only shrinks an island once people start dying, so a sparse island (a/n stays
+      // ~1 while two players dodge on a full-size arena) never closes in. Squeeze it on the
+      // clock as well; in a crowd tp is already the lower of the two, so nothing changes there.
+      const tC = 1.03 - 0.55 * clamp((gt - 10) / (QMAX - 10), 0, 1);
+      const tS = Math.min(tp, tC);
+      if (gt > 8 && tS < isl.sinkS) isl.sinkS = Math.max(tS, isl.sinkS - 0.035 * dt);
+    }
     if (gt < 3) return;
     const u = (gt - 3) / (QT - 3);
     if (gt > QMAX) isl.spawnAcc += 5 * dt;
@@ -424,8 +462,12 @@ class Game {
 
   checkIslands() {
     let all = true;
+    // An island at its quota will never spawn again (directorQual zeroes spawnAcc and clears
+    // the sky for it), so holding it until QMIN was pure dead air — most visible on a small
+    // roster, where an island can start already at quota. Close it at once: whoever is left
+    // on it has qualified.
     for (const isl of this.islands) {
-      if (!isl.done && (isl.alive === 0 || (isl.alive <= isl.quota && this.gt >= QMIN))) {
+      if (!isl.done && (isl.alive === 0 || isl.alive <= isl.quota)) {
         isl.done = true;
         this.meteors = this.meteors.filter(m => m.island !== isl.id);
         this.events.push({ type: 'islandDone', island: isl.id, count: isl.alive });

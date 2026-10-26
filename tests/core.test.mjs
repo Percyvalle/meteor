@@ -45,3 +45,44 @@ function run() {
 }
 const r1 = run(), r2 = run();
 console.log('deterministic:', r1 === r2 ? 'yes (' + r1 + ')' : 'NO\n  ' + r1 + '\n  ' + r2);
+
+// A minimal roster must still get a real match: an island that is already at (or under) its
+// quota has nothing left to spawn, so it must close at once and send its players to the final
+// instead of standing empty for the rest of the qualifier.
+let smallOk = true;
+for (const [N, W] of [[2, 1], [3, 1], [4, 1], [4, 3], [5, 2], [6, 1], [8, 3], [12, 2], [40, 3]]) {
+  for (let s = 0; s < 6; s++) {
+    const x = new Game(4100 + s * 13, W); x.openLobby();
+    for (let i = 0; i < N; i++) x.addPlayer({ key: 'twitch:' + i, display: 'u' + i, platform: 'twitch' }, 0);
+    x.start();
+    let tt = 0, worst = 0; const idle = [0, 0, 0];
+    while (x.phase !== 'won' && tt < 200) {
+      const qual = x.phase === 'qual';
+      x.update(1 / 60); tt += 1 / 60;
+      // an island with players on it, not yet closed, and no meteor of its own
+      if (qual) for (const isl of x.islands) {
+        if (isl.id > 2) continue;
+        if (isl.done || isl.alive === 0 || x.meteors.some(m => m.island === isl.id)) { idle[isl.id] = 0; continue; }
+        idle[isl.id] += 1 / 60; if (idle[isl.id] > worst) worst = idle[isl.id];
+      }
+      x.events.length = 0;
+    }
+    const bad = worst > 5 || tt > 90 || x.phase !== 'won' || x.winners.length !== W;
+    if (bad) { smallOk = false; console.log(`  N=${N} W=${W} seed=${4100 + s * 13}: idle island=${worst.toFixed(1)}s dur=${tt.toFixed(1)}s phase=${x.phase} winners=${x.winners.length}`); }
+  }
+}
+console.log('no island stands idle, any roster size:', smallOk ? 'yes' : 'NO');
+
+// A populated island must never advertise "пройдут 0" — that dooms whoever stands on it.
+let quotaOk = true;
+for (const N of [1, 2, 3, 4, 5, 6, 8, 12, 40, 120]) for (const W of [1, 2, 3]) {
+  for (let s = 0; s < 8; s++) {
+    const x = new Game(6200 + s * 29, W); x.openLobby();
+    for (let i = 0; i < N; i++) x.addPlayer({ key: 'twitch:' + i, display: 'u' + i, platform: 'twitch' }, 0);
+    const lobby = x.islands.filter(i => i.id < 3 && i.n > 0 && i.quota < 1);
+    if (N > W) x.start();
+    const started = x.islands.filter(i => i.id < 3 && i.n0 > 0 && i.quota < 1);
+    if (lobby.length || started.length) { quotaOk = false; console.log(`  N=${N} W=${W} seed=${6200 + s * 29}: ` + x.islands.filter(i => i.id < 3).map(i => `${i.n}>${i.quota}`).join(' ')); }
+  }
+}
+console.log('no populated island has a zero quota:', quotaOk ? 'yes' : 'NO');
