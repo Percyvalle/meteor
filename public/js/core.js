@@ -425,7 +425,13 @@ class Game {
       const tS = Math.min(tp, tC);
       if (gt > 8 && tS < isl.sinkS) isl.sinkS = Math.max(tS, isl.sinkS - 0.035 * dt);
     }
-    if (gt < 3) return;
+    // Пауза после «GO!», чтобы удар не пришёлся раньше, чем взгляд зрителя
+    // перешёл с таймера отсчёта на остров. Трёх секунд было много: вместе с
+    // отсчётом выходило шесть секунд, из них три с пустым небом, и это читается
+    // как зависшая игра. Кривая сложности по-прежнему отсчитывается от 3 с, но
+    // всюду обёрнута в clamp(u, 0, 1) — значит первые метеориты идут с самой
+    // лёгкой стадии и с самым длинным warn, а не с середины разгона.
+    if (gt < 1.5) return;
     const u = (gt - 3) / (QT - 3);
     if (gt > QMAX) isl.spawnAcc += 5 * dt;
     else if (a <= q) { isl.spawnAcc = 0; if (this.meteors.some(m => m.island === isl.id)) this.meteors = this.meteors.filter(m => m.island !== isl.id); }
