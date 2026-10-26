@@ -21,6 +21,48 @@ const before = g.alive;
 g.addPlayer({ key: 'twitch:1', display: 'user1', platform: 'twitch' }, 3);
 console.log('re-join kept roster size:', g.alive === before ? 'yes' : 'NO');
 
+/* Нельзя стоять на двух островах сразу. Общего счётчика alive для этого мало:
+   если при переходе не уменьшить n старого острова, игрок продолжит считаться в
+   его населении и квоте, то есть займёт два места, оставшись одним игроком. */
+{
+  const seats = () => g.islands.filter(i => i.id < 3).reduce((s, i) => s + i.n, 0);
+  const copies = k => g.players.filter(p => p.key === k).length;
+  const K = 'twitch:1';
+  let cheatOk = true;
+  for (const to of [1, 2, 3, 1, 2]) {
+    const seatsBefore = seats();
+    g.addPlayer({ key: K, display: 'user1', platform: 'twitch' }, to);
+    const me = g.byKey.get(K);
+    const onOthers = g.islands.filter(i => i.id < 3 && i.id !== me.island)
+      .map(i => g.players.filter(p => p.alive && p.key === K && p.island === i.id).length)
+      .reduce((a, b) => a + b, 0);
+    if (seats() !== seatsBefore || copies(K) !== 1 || onOthers !== 0 || me.island !== to - 1) {
+      cheatOk = false;
+      console.log(`  !join ${to}: seats ${seatsBefore}->${seats()} copies=${copies(K)} island=${me.island}`);
+    }
+  }
+  console.log('one identity holds exactly one seat, however many !join:', cheatOk ? 'yes' : 'NO');
+  // Сумма населения островов обязана совпадать с числом живых игроков, иначе
+  // кто-то посчитан дважды и квота острова закрывается не теми людьми.
+  const live = g.players.filter(p => p.alive).length;
+  console.log('island headcounts match the roster:', seats() === live ? 'yes' : `NO (${seats()} vs ${live})`);
+}
+
+// Вне лобби !join не принимается вообще — иначе можно было бы перескакивать с
+// острова, по которому уже летит метеорит.
+{
+  const x = new Game(777, 1);
+  x.openLobby();
+  x.addPlayer({ key: 'twitch:a', display: 'a', platform: 'twitch' }, 1);
+  x.addPlayer({ key: 'twitch:b', display: 'b', platform: 'twitch' }, 2);
+  x.start();
+  const added = x.addPlayer({ key: 'twitch:c', display: 'c', platform: 'twitch' }, 1);
+  const hopped = x.addPlayer({ key: 'twitch:a', display: 'a', platform: 'twitch' }, 2);
+  const stillOn1 = x.byKey.get('twitch:a').island === 0;
+  console.log('no joining or island-hopping after the start:',
+    added === null && hopped === null && stillOn1 ? 'yes' : 'NO');
+}
+
 // lookup by key and by display name
 console.log('findPlayer by key:', !!g.findPlayer('twitch:5'), '| by display:', !!g.findPlayer('user5'));
 
