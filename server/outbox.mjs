@@ -14,16 +14,19 @@ const TEXT = {
   lobbyClosing: d => `☄ ${d.seconds} с до старта — участников: ${d.players}. Успевайте !join`,
   matchStart: d => `☄ Поехали! Участников: ${d.players}. Победителей: ${d.winners}.`,
   winners: d => `☄ Победителей в этой игре: ${d.n}`,
-  win: d => d.list.length === 1
+  win: d => (d.draw ? `[розыгрыш #${d.draw}] ` : '') + (d.list.length === 1
     ? `🏆 Победитель — ${d.list[0].display}! Поздравляем!`
-    : `🏆 Победители: ${d.list.map((w, i) => `${i + 1}. ${w.display}`).join(' · ')}`,
+    : `🏆 Победители: ${d.list.map((w, i) => `${i + 1}. ${w.display}`).join(' · ')}`),
+  // Розыгрыш: состав зафиксирован до того, как кто-либо знает случайность.
+  sealed: d => `🔒 Розыгрыш #${d.draw}: набор закрыт, участников ${d.players}. Список ${d.hash}, ждём drand раунд ${d.round}.`,
+  annulled: d => `⛔ Розыгрыш #${d.draw} аннулирован: ${d.reason}.`,
   kill: d => `💀 ${d.display} — ${d.place} место`,
 };
 
 /* Which announcements each verbosity level lets through. */
 const LEVELS = {
   off: [],
-  minimal: ['lobbyOpen', 'lobbyRestart', 'lobbyClosing', 'matchStart', 'win'],
+  minimal: ['lobbyOpen', 'lobbyRestart', 'lobbyClosing', 'matchStart', 'win', 'sealed', 'annulled'],
   verbose: Object.keys(TEXT),
 };
 

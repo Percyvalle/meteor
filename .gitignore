@@ -7,3 +7,4 @@ _orig.html.bak
 relay.config.json
 .relay-test.config.json
 deploy/.env
+draws.jsonl

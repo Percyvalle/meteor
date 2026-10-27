@@ -45,6 +45,14 @@ const DEFAULTS = {
     dedupeMs: 2000,         // ignore an identical message from the same user
   },
 
+  // Режим розыгрыша: случайность берётся из drand, каждый розыгрыш пишется в
+  // журнал, а всё, чем ведущий мог бы подкинуть участника (тестовые сообщения,
+  // боты), выключено. Подробности — README, «Розыгрыш с призами».
+  giveaway: {
+    enabled: false,
+    journal: 'draws.jsonl',
+  },
+
   // off | minimal | verbose
   replies: 'minimal',
 
@@ -121,6 +129,10 @@ export function loadConfig() {
   cfg.game.lobbySeconds = Math.max(5, Math.min(600, +cfg.game.lobbySeconds || 45));
   // A match needs two players to be a match at all, so 2 is also the floor.
   cfg.game.minPlayers = Math.max(2, Math.min(20, cfg.game.minPlayers | 0 || 2));
+  if (cfg.giveaway.enabled && cfg.game.simulateBots > 0) {
+    log.warn('режим розыгрыша: simulateBots выключен — боты стали бы участниками с шансом на приз');
+    cfg.game.simulateBots = 0;
+  }
   if (!cfg.twitch.channel) cfg.twitch.enabled = false;
   // With the relay the channel comes from the link flow, so none is configured here.
   if (!cfg.kick.channel && cfg.kick.transport !== 'relay') cfg.kick.enabled = false;
@@ -133,6 +145,7 @@ export function publicConfig(cfg) {
     game: cfg.game,
     commands: cfg.commands,
     replies: cfg.replies,
+    giveaway: { enabled: !!cfg.giveaway.enabled },
     twitch: { enabled: cfg.twitch.enabled, channel: cfg.twitch.channel, transport: cfg.twitch.transport },
     kick: { enabled: cfg.kick.enabled, channel: cfg.kick.channel, transport: cfg.kick.transport },
   };

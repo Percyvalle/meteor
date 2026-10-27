@@ -15,6 +15,7 @@
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { background: var(--bg); }
   body {
     margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.5 var(--f-ui); padding: 28px 20px 48px;
@@ -225,7 +226,17 @@
       <div class="note">Чтение работает и без авторизации (Twitch — анонимно). Авторизация нужна, чтобы бот <b>писал</b> в чат.</div>
     </section>
 
-    <section class="card">
+    <section class="card" id="c-draw" hidden>
+      <div class="card-h"><h2>Розыгрыш</h2><span class="count" id="d-status">—</span></div>
+      <div class="sub" id="d-info">Розыгрыш появится, когда закроется набор. Состав фиксируется хэшем, случайность берётся из drand.</div>
+      <div class="row tight">
+        <button id="b-record" class="sm" type="button">Скопировать запись</button>
+        <a id="d-verify" href="/verify.html?last=1" target="_blank">Проверка ↗</a>
+      </div>
+      <div class="note">Запись — то, что публикуется для зрителей: с ней любой пересчитает розыгрыш на странице проверки. Тестовые сообщения и боты в режиме розыгрыша отключены.</div>
+    </section>
+
+    <section class="card" id="c-inject">
       <div class="card-h"><h2>Тестовое сообщение</h2></div>
       <div class="sub">Прогоняет весь путь «чат → роутер → оверлей» без живого чата.</div>
       <div class="field">
@@ -297,7 +308,7 @@ for (let i = 1; i <= 20; i++) {
 /* ---------- rendering ---------- */
 
 const PHASE = {
-  idle: 'ожидание', lobby: 'лобби', countdown: 'отсчёт',
+  idle: 'ожидание', lobby: 'лобби', sealing: 'набор закрыт', countdown: 'отсчёт',
   qual: 'отбор', transfer: 'перелёт', final: 'финал', won: 'победа',
 };
 
@@ -323,12 +334,27 @@ function renderSession(s) {
     const pct = i.quota ? Math.min(100, Math.round(i.players / Math.max(i.players, i.quota) * 100)) : 0;
     return `<div class="isl">
       <div class="isl-top">
-        <span class="isl-name"><span class="isl-n">${i.id}</span>${i.name} <span class="danger d${i.danger}">опасность ${i.danger}</span></span>
-        <b>${i.players}<i>→</i>${i.quota}</b>
+        <span class="isl-name"><span class="isl-n">${i.id}</span>${i.name} <span class="danger d${i.danger}">опасность ${i.danger || '?'}</span></span>
+        <b>${i.players}<i>→</i>${i.quota || '?'}</b>
       </div>
       <div class="bar"><span style="width:${pct}%"></span></div>
     </div>`;
   }).join('') || '<div class="empty">острова появятся после старта лобби</div>';
+  renderDraw(s);
+}
+
+const DSTATUS = { sealed: 'ждём drand', started: 'идёт', completed: 'завершён', annulled: 'аннулирован' };
+const short = h => h ? `${h.slice(0, 4)}…${h.slice(-4)}`.toUpperCase() : '—';
+function renderDraw(s) {
+  // Режим розыгрыша: карточка розыгрыша вместо тестовых сообщений.
+  $('c-draw').hidden = !s.giveaway;
+  $('c-inject').hidden = !!s.giveaway;
+  const d = s.draw;
+  if (!s.giveaway || !d) return;
+  $('d-status').textContent = `#${d.no} · ${DSTATUS[d.status] || d.status}`;
+  $('d-info').innerHTML = `участников <b>${d.players}</b> · список <b>${short(d.rosterHash)}</b> · drand <b>${d.round}</b>`
+    + (d.seedHex ? ` · сид <b>${d.seedHex.slice(0, 8).toUpperCase()}</b>` : '');
+  $('d-verify').href = `/verify.html?draw=${d.no}`;
 }
 
 function renderAdapters(a) {
@@ -485,6 +511,14 @@ function inject(over) {
   });
 }
 $('b-inject').onclick = () => inject();
+$('b-record').onclick = async () => {
+  const d = state.session && state.session.draw;
+  const r = await get('/api/draw' + (d ? `?draw=${d.no}` : ''));
+  if (!r.ok) { $('b-record').textContent = 'Записи пока нет'; return; }
+  try { await navigator.clipboard.writeText(JSON.stringify(r.record)); $('b-record').textContent = 'Скопировано'; }
+  catch { $('b-record').textContent = 'Не скопировалось'; }
+  setTimeout(() => { $('b-record').textContent = 'Скопировать запись'; }, 2000);
+};
 $('i-text').addEventListener('keydown', e => { if (e.key === 'Enter') inject(); });
 
 $('b-flood').onclick = async () => {

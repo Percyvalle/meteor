@@ -1,7 +1,7 @@
 /* Renderer + match director. Owns the canvas, the frame loop and the lobby timer.
    The simulation itself lives in core.js; this module never talks to the network —
    app.js wires the two together. */
-import { W, H, CELL, GW, GH, TAU, LAYOUT, FINAL, clamp, Game } from './core.js';
+import { W, H, CELL, GW, GH, TAU, LAYOUT, FINAL, STEP, clamp, Game, buildMatch } from './core.js';
 import { makeBots } from './bots.js';
 
 /* ---------- config ---------- */
@@ -9,6 +9,9 @@ let LOBBY = 45;        // seconds the lobby stays open
 let MIN_PLAYERS = 2;   // the lobby clock holds until this many are in
 let SIM_COUNT = 300;   // bots used when simulating
 let WINNERS = 1;
+// С хостом лобби закрывает и матч ведёт он; оверлей только повторяет то же
+// ядро. Без хоста (solo, демо с ботами) оверлей стартует сам, как раньше.
+let HOST = false;
 let cv = null, ctx = null;
 const listeners = new Set();
 function emit(type, data) { for (const fn of listeners) { try { fn(type, data); } catch (e) { console.error(e); } } }
@@ -69,6 +72,9 @@ function resetRender() {
     particles: [], rings: [], craters: [], glows: [], feed: [], banners: [],
     shake: 0, flash: 0, groundDirty: true, groundTimer: 0,
     cam: { x: W / 2, y: H / 2, z: 1 }, winT: -1,
+    seal: null,     // набор закрыт, ждём случайность: { draw, players, rosterHash, round, giveaway }
+    draw: null,     // розыгрыш, который сейчас играется
+    annul: null,    // { draw, reason, t }
   };
 }
 function cellColor(key, s, edge) {
@@ -376,7 +382,8 @@ function drawHUD(now, dt) {
   // считает уровни мгновенно и идёт на тихий остров. После отсчёта уровни и так
   // открыты, а !join уже не принимается — там сид снова полезен для проверки.
   const seedShown = ph !== 'idle' && ph !== 'lobby';
-  ctx.fillText((seedShown ? `сид ${game.seed.toString(16).toUpperCase().padStart(8, '0')}  ·  ` : '')
+  ctx.fillText((R.draw && R.draw.giveaway ? `розыгрыш #${R.draw.no}  ·  ` : '')
+    + (seedShown ? `сид ${seedText()}  ·  ` : '')
     + `победителей: ${game.winnersN}`, 48, 92);
   if (ph !== 'idle' && ph !== 'lobby') {
     const N = game.startCount, a = game.alive;
@@ -460,8 +467,31 @@ function drawHUD(now, dt) {
     ctx.restore();
   }
   R.banners = R.banners.filter(b => b.t < 2.4);
+  if (R.annul) {
+    R.annul.t += dt;
+    if (R.annul.t > 9) R.annul = null;
+    else {
+      const w = 860, h = 130, x = W / 2 - w / 2, y = H - h - 36;
+      ctx.fillStyle = C.panel; rrect(ctx, x, y, w, h, 24); ctx.fill(); ctx.strokeStyle = 'rgba(255,75,58,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.textAlign = 'center'; ctx.fillStyle = C.danger; ctx.font = `36px ${F_DISP}`;
+      ctx.fillText(`РОЗЫГРЫШ #${R.annul.draw} АННУЛИРОВАН`, W / 2, y + 56);
+      ctx.fillStyle = C.muted; ctx.font = `500 20px ${F_UI}`; ctx.fillText(R.annul.reason, W / 2, y + 96);
+    }
+  }
+  // Набор закрыт: состав уже зафиксирован хэшем, а случайности ещё нет ни у кого.
+  if (R.seal && ph === 'lobby') {
+    const s = R.seal, w = 980, h = 178, x = W / 2 - w / 2, y = H - h - 36;
+    ctx.fillStyle = C.panel; rrect(ctx, x, y, w, h, 24); ctx.fill(); ctx.strokeStyle = 'rgba(255,211,107,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.textAlign = 'center'; ctx.fillStyle = C.gold; ctx.font = `40px ${F_DISP}`;
+    ctx.fillText(s.giveaway ? `РОЗЫГРЫШ #${s.draw} · НАБОР ЗАКРЫТ` : 'НАБОР ЗАКРЫТ', W / 2, y + 60);
+    ctx.fillStyle = C.ink; ctx.font = `500 22px ${F_MONO}`;
+    ctx.fillText(`участников ${s.players}  ·  список ${shortHash(s.rosterHash)}`, W / 2, y + 102);
+    ctx.fillStyle = C.muted; ctx.font = `500 19px ${F_UI}`;
+    const dots = '.'.repeat(1 + Math.floor(now * 2) % 3);
+    ctx.fillText(s.giveaway ? `ждём drand раунд ${s.round} — его значение ещё никому не известно${dots}` : `перемешиваем${dots}`, W / 2, y + 140);
+  }
   // lobby
-  if (ph === 'lobby' || ph === 'idle') {
+  else if (ph === 'lobby' || ph === 'idle') {
     const w = 860, h = 178, x = W / 2 - w / 2, y = H - h - 36;
     ctx.fillStyle = C.panel; rrect(ctx, x, y, w, h, 24); ctx.fill(); ctx.strokeStyle = C.line; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.font = `44px ${F_DISP}`;
@@ -540,14 +570,23 @@ function drawWinners(now, dt) {
     });
   }
   ctx.textAlign = 'center'; ctx.fillStyle = C.dim; ctx.font = `500 16px ${F_MONO}`;
-  ctx.fillText(`сид ${game.seed.toString(16).toUpperCase().padStart(8, '0')}  ·  ${fmtTime(game.playT)}`, cx, list.length === 1 ? 740 : H - 70);
+  const proof = R.draw && R.draw.giveaway
+    ? `розыгрыш #${R.draw.no}  ·  список ${shortHash(R.draw.rosterHash)}  ·  drand ${R.draw.round}  ·  сид ${seedText()}  ·  проверка: verify.html`
+    : `сид ${seedText()}  ·  ${fmtTime(game.playT)}`;
+  // В розыгрыше эта строка — то, что зритель сверяет на странице проверки,
+  // поэтому она читается, а не теряется в фоне.
+  if (R.draw && R.draw.giveaway) { ctx.fillStyle = C.muted; ctx.font = `500 19px ${F_MONO}`; }
+  ctx.fillText(proof, cx, list.length === 1 ? 740 : H - 70);
   ctx.restore();
 }
 
 /* ---------- frame ---------- */
-let last = performance.now(), beatAcc = 0, lobbyLeft = 0, lobbyDur = LOBBY, fakeQueue = [], fakeAcc = 0, fakeRate = 0, swapAcc = 0;
+let last = performance.now(), simAcc = 0, beatAcc = 0, lobbyLeft = 0, lobbyDur = LOBBY, fakeQueue = [], fakeAcc = 0, fakeRate = 0, swapAcc = 0;
 function frame(nowMs) {
-  const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
+  // raw — реальное время, им кормится симуляция: оверлей не должен отставать от
+  // хоста из-за подвисшего кадра. dt — для анимаций, ему скачки ни к чему.
+  const raw = Math.min(1, Math.max(0, (nowMs - last) / 1000)); last = nowMs;
+  const dt = Math.min(0.05, raw);
   const now = nowMs / 1000;
   if (game.phase === 'lobby') {
     // Bots keep trickling in even while the clock is held — they are what opens
@@ -563,9 +602,12 @@ function frame(nowMs) {
       swapAcc += dt * 1.6;
       while (swapAcc >= 1) { swapAcc--; const bots = game.players; const p = bots[Math.floor(Math.random() * bots.length)]; if (p && p.bot) game.addPlayer({ key: p.key, display: p.name, platform: p.platform }, game.leastIsland() + 1); }
     }
-    if (lobbyLeft <= 0) { if (game.start()) emit('phase', snapshot()); else { lobbyLeft = 10; lobbyDur = 10; } }
+    if (!HOST && lobbyLeft <= 0) { if (game.start()) emit('phase', snapshot()); else { lobbyLeft = 10; lobbyDur = 10; } }
   }
-  game.update(dt);
+  // Ровно STEP за вызов — иначе исход зависел бы от частоты кадров. Отставание
+  // догоняется по 12 шагов за кадр и никогда не выбрасывается.
+  simAcc += raw;
+  for (let n = 0; simAcc >= STEP && n < 12; n++) { game.update(STEP); simAcc -= STEP; }
   handleEvents();
 
   // Heartbeat: the host mirrors phase/alive/island counts, and those move
@@ -735,6 +777,44 @@ function startLobby(opts) {
   emit('phase', snapshot());
 }
 
+/* Хост закрыл набор. */
+function seal(info) {
+  R.seal = { draw: info.draw ?? info.no, players: info.players, rosterHash: info.rosterHash, round: info.round, giveaway: !!info.giveaway };
+  lobbyLeft = 0;
+}
+
+/* Матч от хоста: тот же buildMatch, что у хоста и на странице проверки.
+   steps > 0 — оверлей перезагрузили посреди матча: догоняем без отрисовки. */
+function playMatch(params, draw, steps) {
+  game = buildMatch(params);
+  resetRender();
+  R.draw = draw || null;
+  for (const p of game.players) p.dropT = steps ? 0 : 0.7;
+  for (let i = 0; i < (steps | 0) && game.phase !== 'won'; i++) { game.update(STEP); game.events.length = 0; }
+  game.events.length = 0;
+  if (game.phase === 'won') R.winT = 1;
+  simAcc = 0;
+  renderGround();
+  emit('phase', snapshot());
+}
+
+function annul(info) {
+  newGame(false);
+  R.annul = { draw: info.draw, reason: info.reason || '', t: 0 };
+}
+
+/* Часы лобби ведёт хост; свои оверлей лишь сверяет раз в секунду. */
+function syncLobby(s) {
+  if (!s || game.phase !== 'lobby' || s.phase !== 'lobby') return;
+  if (Math.abs(lobbyLeft - s.lobbyLeft) > 1.5) lobbyLeft = s.lobbyLeft;
+  if (s.lobbyDur) lobbyDur = s.lobbyDur;
+}
+
+function seedText() {
+  return R.draw && R.draw.seedHex ? R.draw.seedHex.slice(0, 8).toUpperCase() : game.seed.toString(16).toUpperCase().padStart(8, '0');
+}
+function shortHash(h) { return h ? `${h.slice(0, 4)}…${h.slice(-4)}`.toUpperCase() : '—'; }
+
 function addBot(b) { const p = game.addPlayer(b, b.choice); if (p) p.bot = true; return p; }
 
 function forceStart() {
@@ -780,9 +860,10 @@ function mount(canvas, cfg) {
   if (o.bots !== undefined) SIM_COUNT = clamp(o.bots | 0, 2, 1000);
   if (o.winners !== undefined) WINNERS = clamp(o.winners | 0, 1, 20);
   if (o.min !== undefined) MIN_PLAYERS = clamp(o.min | 0, 2, 20);
+  HOST = !!o.host;
   newGame(false);
   if (o.simulate) startLobby({ simulate: true });
   requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
 }
 
-export { mount, newGame, startLobby, forceStart, setWinners, addPlayer, snapshot, onEvent };
+export { mount, newGame, startLobby, forceStart, setWinners, addPlayer, snapshot, onEvent, seal, playMatch, annul, syncLobby };

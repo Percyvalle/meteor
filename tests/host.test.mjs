@@ -111,22 +111,25 @@ await say('streamer', '!meteor winners 99', { broadcaster: true });
 await sleep(200);
 check('out-of-range winner counts are rejected', cmds('winners').length === 1);
 
-/* ---- go ---- */
+/* ---- go: хост закрывает набор и сам ведёт матч ---- */
 got.length = 0;
 await say('mody', '!meteor go', { mod: true });
-await sleep(200);
-check('a mod can force the start', cmds('go').length === 1);
-
-/* ---- overlay reports flow back into the session ---- */
-await post('/api/report', { type: 'phase', phase: 'qual', alive: 7, winners: 5, islands: [] });
-await sleep(150);
+await sleep(300);
+const seal = cmds('seal')[0], match = cmds('match')[0];
+check('a mod can close the lobby', !!seal && seal.players >= 2, JSON.stringify(seal));
+check('the host hands the overlay a finished match setup', !!match && match.params && match.params.roster.length === seal.players);
+check('the match seed comes after the roster is sealed', !!match && got.indexOf(seal) < got.indexOf(match));
 let st = await fetch(BASE + '/api/state').then(r => r.json());
-check('overlay phase report updates the session', st.session.phase === 'qual' && st.session.alive === 7, st.session.phase);
+check('the host runs the match itself', ['countdown', 'qual'].includes(st.session.phase), st.session.phase);
 
+/* ---- отчёты оверлея больше ничего не решают ---- */
+await post('/api/report', { type: 'phase', phase: 'won', alive: 1, winners: 5, islands: [] });
 await post('/api/report', { type: 'win', list: [{ key: 'twitch:alice', display: 'alice', place: 1 }] });
 await sleep(150);
 st = await fetch(BASE + '/api/state').then(r => r.json());
-check('win report is recorded', st.session.phase === 'won' && st.session.lastWinners.length === 1);
+check('an overlay report cannot end the match', st.session.phase !== 'won' && st.session.lastWinners.length === 0, st.session.phase);
+const rec = await fetch(BASE + '/api/draw').then(r => r.json());
+check('the draw record is served to the verify page', rec.ok && rec.record.roster.length === seal.players && !!rec.record.seed);
 
 /* ---- resync: a reconnecting overlay gets the roster back ---- */
 await post('/api/cmd', { name: 'reset' });
@@ -148,12 +151,10 @@ got.length = 0;
 await post('/api/cmd', { name: 'start' });
 await sleep(150);
 await say('gina', '!join 2');          // explicit island
-await say('hugo', '!join');            // automatic — the overlay decides
+await say('hugo', '!join');            // automatic — the host decides
 await sleep(250);
-// The fake overlay reports where it actually seated them.
-await post('/api/report', { type: 'joinResult', key: 'twitch:gina', ok: true, island: 2 });
-await post('/api/report', { type: 'joinResult', key: 'twitch:hugo', ok: true, island: 1 });
-await sleep(150);
+const hugoSeat = of('join').find(j => j.key === 'twitch:hugo');
+check('the host seats an automatic join itself', hugoSeat && hugoSeat.island >= 1, JSON.stringify(hugoSeat));
 
 got.length = 0;
 await post('/api/cmd', { name: 'start', keep: true });
@@ -164,9 +165,9 @@ check('the keep-restart rolls a new seed', !!again && again.seed > 0 && again.se
 const seats = of('join');
 check('kept players are replayed as joins', seats.length === 2, `got ${seats.length}`);
 check('an explicit island survives the restart',
-  seats.some(j => j.key === 'twitch:gina' && j.choice === 2), JSON.stringify(seats));
+  seats.some(j => j.key === 'twitch:gina' && j.island === 2), JSON.stringify(seats));
 check('an automatic island survives the restart',
-  seats.some(j => j.key === 'twitch:hugo' && j.choice === 1), JSON.stringify(seats));
+  seats.some(j => j.key === 'twitch:hugo' && hugoSeat && j.island === hugoSeat.island), JSON.stringify(seats));
 st = await fetch(BASE + '/api/state').then(r => r.json());
 check('the roster is not emptied by a keep-restart', st.session.players === 2, `players=${st.session.players}`);
 check('the keep-restart leaves the lobby open', st.session.phase === 'lobby' && st.session.open === true);
@@ -187,7 +188,7 @@ check('!meteor restart keeps the players', cmds('start')[0] && cmds('start')[0].
   && of('join').some(j => j.key === 'twitch:ivan' && j.choice === 3), JSON.stringify(got));
 
 /* ---- static files and the traversal guard ---- */
-for (const [path, want] of [['/overlay.html', 200], ['/control.html', 200], ['/js/core.js', 200], ['/nope.html', 404]]) {
+for (const [path, want] of [['/overlay.html', 200], ['/control.html', 200], ['/verify.html', 200], ['/js/core.js', 200], ['/js/draw.js', 200], ['/nope.html', 404]]) {
   const r = await fetch(BASE + path);
   check(`GET ${path} -> ${want}`, r.status === want, `got ${r.status}`);
 }

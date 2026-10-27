@@ -112,36 +112,38 @@ function rig(over) {
   const r = rig();
   r.mod('!meteor start');
   r.say('100', '!join');
-  r.session.report({ type: 'phase', phase: 'qual', alive: 1 });
+  r.say('101', '!join');
+  await r.session.close();                 // набор закрыт, матч идёт на хосте
   r.sent.length = 0;
   r.say('200', '!join 2');
-  check('после старта !join не доходит до оверлея', r.joins().length === 0);
+  check('после закрытия набора !join не доходит до оверлея', r.joins().length === 0);
   check('и не заводит места в ростере', !r.session.roster.has('twitch:200'));
   check('учтено как сброшенное по фазе', r.router.dropped.phase === 1);
+  check('состав матча — ровно те, кто был до закрытия',
+    r.session.match.params.roster.map(x => x[0]).join(',') === 'twitch:100,twitch:101');
+  r.session.reset(true);
 }
 
-/* ---- гонка фаз: !join, отправленный в момент старта ----
+/* ---- место решает хост ----
 
-   Фазу хост отражает с задержкой в один отчёт оверлея, поэтому сообщение,
-   посланное на последней секунде лобби, успевает уйти в уже стартовавший
-   оверлей и вернуться отказом. Сидящего игрока такой отказ выбивать не должен:
-   в симуляции он остался бы играть, а из ростера исчез — и из !meteor restart. */
+   Раньше остров подтверждал оверлей, и его отчёт мог переписать ростер. Теперь
+   рассаживает хост, а отчёты оверлея на состав не влияют вовсе: иначе любая
+   вкладка с оверлеем могла бы пересадить игрока или выкинуть его из розыгрыша. */
 {
   const r = rig();
   r.mod('!meteor start');
   r.say('100', '!join 1');
-  r.session.report({ type: 'joinResult', key: 'twitch:100', ok: true, island: 1 });
-  r.say('100', '!join 2');                                   // доехало до стартовавшего оверлея
+  const seat = r.joins().find(j => j.key === 'twitch:100');
+  check('хост сам назначает остров и шлёт его оверлею', seat && seat.island === 1, JSON.stringify(seat));
   r.session.report({ type: 'joinResult', key: 'twitch:100', ok: false });
-  check('отказ оверлея не выбивает уже посаженного игрока', r.session.roster.has('twitch:100'),
-    `roster=${[...r.session.roster.keys()].join(',')}`);
-  check('его остров остался прежним', r.session.roster.get('twitch:100').island === 1,
-    String(r.session.roster.get('twitch:100').island));
-
-  // А тот, кого оверлей никогда не сажал, в ростере оставаться не должен.
-  r.say('300', '!join 3');
-  r.session.report({ type: 'joinResult', key: 'twitch:300', ok: false });
-  check('неподтверждённый джойн из ростера убирается', !r.session.roster.has('twitch:300'));
+  r.session.report({ type: 'joinResult', key: 'twitch:100', ok: true, island: 3 });
+  r.session.report({ type: 'phase', phase: 'won', alive: 0 });
+  check('отчёты оверлея не трогают ростер', r.session.roster.get('twitch:100')?.island === 1,
+    JSON.stringify(r.session.roster.get('twitch:100')));
+  check('и не двигают фазу', r.session.phase === 'lobby', r.session.phase);
+  r.say('300', '!join');
+  check('автоматический остров тоже назначает хост', r.session.roster.get('twitch:300')?.island >= 1);
+  r.session.reset(true);
 }
 
 /* ---- дедуп и мусор ---- */

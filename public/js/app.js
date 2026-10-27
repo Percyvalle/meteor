@@ -5,7 +5,8 @@ import { connect, post } from './net.js';
 const QS = new URLSearchParams(location.search);
 const OBS = QS.get('obs') === '1';
 const SOLO = QS.get('solo') === '1';          // run without a host (local testing)
-const SIMULATE = QS.get('bots') !== null || SOLO;
+// Боты оверлея — только без хоста: с хостом в матче играет лишь его состав.
+const SIMULATE = SOLO;
 if (OBS) document.documentElement.classList.add('obs');
 
 M.mount(document.getElementById('stage'), {
@@ -14,6 +15,7 @@ M.mount(document.getElementById('stage'), {
   winners: QS.get('winners') ? +QS.get('winners') : undefined,
   min: QS.get('min') ? +QS.get('min') : undefined,
   simulate: SIMULATE,
+  host: !SOLO,
 });
 
 if (SOLO) {
@@ -27,38 +29,40 @@ if (SOLO) {
       case 'resync':
         if (m.session) applySession(m.session);
         break;
-      case 'join': {
-        const r = M.addPlayer({ key: m.key, display: m.display, platform: m.platform }, m.choice);
-        post('/api/report', { type: 'joinResult', key: m.key, ok: !!r, island: r ? r.island : 0 });
-        break;
-      }
+      case 'phase': M.syncLobby(m.session); break;
+      // Остров уже выбран хостом: оверлей рассаживает ровно так же.
+      case 'join': M.addPlayer({ key: m.key, display: m.display, platform: m.platform }, m.island || m.choice); break;
       case 'cmd': runCmd(m); break;
     }
   });
 
   function applySession(s) {
-    if (!s || !s.open) return;
-    // Rebuild the lobby from the host's seed so a reloaded overlay lands on the same match.
-    M.startLobby({ seed: s.seed, winners: s.winners, lobby: s.lobbyDur, left: s.lobbyLeft, min: s.minPlayers, simulate: s.simulate, bots: s.bots });
-    // `island` is the seat the overlay reported earlier; it beats the raw choice
-    // so an automatic pick is not re-rolled onto a different island on reload.
-    for (const p of s.roster || []) M.addPlayer(p, p.island || p.choice);
+    if (!s) return;
+    const lobby = () => {
+      M.startLobby({ seed: s.seed, winners: s.winners, lobby: s.lobbyDur, left: s.lobbyLeft, min: s.minPlayers });
+      for (const p of s.roster || []) M.addPlayer(p, p.island || p.choice);
+    };
+    // Перезагрузка посреди матча: тот же матч, догнанный до шага хоста.
+    if (s.match) { M.playMatch(s.match.params, s.draw, s.match.steps); return; }
+    if (s.phase === 'lobby' || s.phase === 'sealing') lobby();
+    if (s.phase === 'sealing' && s.draw) M.seal(s.draw);
   }
 
   function runCmd(m) {
     switch (m.name) {
-      case 'start': M.startLobby({ seed: m.seed, winners: m.winners, lobby: m.lobby, min: m.min, simulate: m.simulate, bots: m.bots }); break;
-      case 'go': M.forceStart(); break;
+      case 'start': M.startLobby({ seed: m.seed, winners: m.winners, lobby: m.lobby, min: m.min }); break;
+      case 'seal': M.seal(m); break;
+      case 'match': M.playMatch(m.params, m.draw, 0); break;
+      case 'annul': M.annul(m); break;
       case 'reset': M.newGame(false); break;
       case 'winners': M.setWinners(m.value); break;
     }
   }
 
-  /* ---- overlay -> host ---- */
+  /* ---- overlay -> host ----
+     Исход считает хост; победителей оверлей отправляет только для сверки. */
   M.onEvent((type, data) => {
-    if (type === 'phase' || type === 'win' || type === 'kill' || type === 'newgame') {
-      post('/api/report', Object.assign({ type }, data));
-    }
+    if (type === 'win') post('/api/report', Object.assign({ type }, data));
   });
   window.addEventListener('beforeunload', () => net.close());
 }

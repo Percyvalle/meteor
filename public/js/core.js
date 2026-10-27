@@ -10,6 +10,10 @@ const TAU = Math.PI * 2;
 // против 20 на три острова. Ниже 30 каждые ещё 2.5с стоят +1.6 метеорита в
 // секунду, и отбор превращается в кашу.
 const QT = 30, QMIN = 32, QMAX = 44;
+// Шаг симуляции. Исход матча зависит только от сида и состава, если каждый
+// вызов update() получает ровно STEP: с реальным временем кадра решало бы ещё и
+// то, как OBS отрисовал кадры, и сид на экране ничего бы не доказывал.
+const STEP = 1 / 60;
 const DANGER = { 1: { r: 0.82, warn: 1.2, hails: [] }, 2: { r: 1, warn: 1, hails: [] }, 3: { r: 1.22, warn: 0.82, hails: [9, 21] } };   // qualifier pacing (game seconds)
 
 const PROFILES = {
@@ -61,6 +65,16 @@ class Game {
     this.sinkT = new Float32Array(n);
     for (let i = 0; i < n; i++) this.shade[i] = this.rng();
     this.islands = LAYOUT.map((L, i) => this.buildIsland(i, L, false));
+    this.rollDanger();
+  }
+
+  // Розыгрыш: геометрия островов уже построена из сида лобби, а всё, что решает
+  // исход (опасность, квоты, характеристики, метеориты), берётся из итогового
+  // сида, который появляется только после закрытия набора. Поэтому острова не
+  // меняют форму на глазах у зрителей, а повлиять на итог сидом лобби нельзя.
+  reseed(seed) {
+    this.seed = seed >>> 0;
+    this.rng = mulberry32(this.seed);
     this.rollDanger();
   }
 
@@ -542,4 +556,26 @@ class Game {
   }
 }
 
-export { W, H, CELL, GW, GH, TAU, QT, DANGER, PROFILES, LAYOUT, FINAL, mulberry32, hashStr, clamp, Game };
+/* Матч розыгрыша как чистая функция параметров: хост, оверлей и страница
+   проверки строят его одним и тем же кодом. roster — [key, name, island 1..3]
+   в каноничном порядке (по key); платформа — префикс ключа. */
+function buildMatch({ layout, seed, winners, roster }) {
+  const g = new Game(layout, winners);
+  g.reseed(seed);
+  g.openLobby();
+  for (const [key, name, island] of roster) {
+    g.addPlayer({ key, display: name, platform: String(key).split(':')[0] }, island);
+  }
+  g.start();
+  return g;
+}
+
+/* Прогон до конца без отрисовки — для проверки и тестов. */
+function runMatch(params, maxSteps = 60 * 600) {
+  const g = buildMatch(params);
+  let steps = 0;
+  while (g.phase !== 'won' && steps < maxSteps) { g.update(STEP); g.events.length = 0; steps++; }
+  return { game: g, steps };
+}
+
+export { W, H, CELL, GW, GH, TAU, QT, STEP, DANGER, PROFILES, LAYOUT, FINAL, mulberry32, hashStr, clamp, Game, buildMatch, runMatch };

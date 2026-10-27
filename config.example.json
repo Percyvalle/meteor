@@ -12,6 +12,11 @@
 
   "replies": "minimal",
 
+  "giveaway": {
+    "enabled": false,
+    "journal": "draws.jsonl"
+  },
+
   "commands": {
     "adminRoles": ["broadcaster", "mod"],
     "islandChoiceRoles": ["everyone"],

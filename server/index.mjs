@@ -257,8 +257,17 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
-    /* Synthetic chat message - lets the whole pipeline be tested with no live chat. */
+    /* Запись розыгрыша для страницы проверки: последняя или ?draw=N. */
+    if (req.method === 'GET' && p === '/api/draw') {
+      const rec = session.record(+url.searchParams.get('draw') || 0);
+      return rec ? json(res, 200, { ok: true, record: rec }) : json(res, 404, { ok: false, error: 'нет такого розыгрыша' });
+    }
+
+    /* Synthetic chat message - lets the whole pipeline be tested with no live chat.
+       В режиме розыгрыша закрыто: так ведущий мог бы вписать в состав кого угодно,
+       с любым id и любым ником. */
     if (req.method === 'POST' && p === '/api/chat/inject') {
+      if (cfg.giveaway.enabled) return json(res, 403, { ok: false, error: 'режим розыгрыша: тестовые сообщения отключены' });
       const b = await readBody(req);
       bus.push({
         platform: b.platform || 'local',

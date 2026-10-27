@@ -1,0 +1,287 @@
+<title>Метеоритный дождь — проверка розыгрыша</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #04060d; --panel: #0b1120; --well: #080d1a; --line: #1a2340; --line2: #2a3760;
+    --ink: #eaf0ff; --muted: #8f99ba; --dim: #56608a;
+    --fire: #ff7a2f; --ok: #7ff0c4; --warn: #ffd36b; --bad: #ff5a48;
+    --f-ui: Rubik, "Segoe UI", Arial, sans-serif;
+    --f-mono: "JetBrains Mono", Consolas, monospace;
+    --f-head: "Russo One", Rubik, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: var(--bg); }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.55 var(--f-ui); padding: 28px 16px 56px;
+    background: radial-gradient(900px 380px at 85% -120px, rgba(255,122,47,.13), transparent 70%), var(--bg);
+  }
+  .wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 20px; }
+  .eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+  h1 { font-family: var(--f-head); font-weight: 400; font-size: clamp(22px, 5vw, 30px); line-height: 1.2; margin: 4px 0 0; }
+  h1 span { color: var(--fire); }
+  .lead { color: var(--muted); margin: 8px 0 0; max-width: 64ch; text-wrap: pretty; }
+  .card { background: linear-gradient(180deg, #0d1426, var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px 20px; display: grid; gap: 14px; }
+  .card h2 { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  textarea, input { width: 100%; background: var(--well); color: var(--ink); border: 1px solid var(--line2); border-radius: 10px; padding: 10px 12px; font: 13px/1.5 var(--f-mono); }
+  textarea { min-height: 120px; resize: vertical; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { font: 600 14px var(--f-ui); color: #1a0b02; background: var(--fire); border: 0; border-radius: 10px; padding: 10px 18px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line2); }
+  label.file { font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  label.file input { display: none; }
+
+  .verdict { border-radius: 14px; padding: 16px 18px; font-size: 17px; display: grid; gap: 4px; }
+  .verdict b { font-family: var(--f-head); font-weight: 400; font-size: 22px; letter-spacing: .3px; }
+  .verdict.ok { background: rgba(127,240,196,.08); border: 1px solid rgba(127,240,196,.35); }
+  .verdict.ok b { color: var(--ok); }
+  .verdict.bad { background: rgba(255,90,72,.08); border: 1px solid rgba(255,90,72,.4); }
+  .verdict.bad b { color: var(--bad); }
+  .verdict.warn { background: rgba(255,211,107,.07); border: 1px solid rgba(255,211,107,.35); }
+  .verdict.warn b { color: var(--warn); }
+  .verdict span { color: var(--muted); font-size: 14px; }
+
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  ol.steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--well); }
+  .mark { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 600 13px var(--f-ui); margin-top: 1px; }
+  .s-ok .mark { background: rgba(127,240,196,.15); color: var(--ok); }
+  .s-bad .mark { background: rgba(255,90,72,.18); color: var(--bad); }
+  .s-warn .mark { background: rgba(255,211,107,.15); color: var(--warn); }
+  .s-run .mark { background: var(--line); color: var(--muted); }
+  .step-t { font-weight: 600; }
+  .step-d { grid-column: 2; color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+  .step-d code { font-family: var(--f-mono); color: var(--ink); font-size: 12.5px; }
+
+  .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; font-size: 13.5px; margin: 0; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+  .winners { display: flex; flex-wrap: wrap; gap: 8px; }
+  .winner { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,211,107,.4); color: var(--warn); font-weight: 600; }
+  .winner small { color: var(--muted); font: 400 12px var(--f-mono); margin-left: 6px; }
+
+  .table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { position: sticky; top: 0; background: #0d1426; color: var(--muted); font-weight: 600; }
+  td.mono { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+  tr.hit td { background: rgba(255,122,47,.12); }
+  tr.win td:first-child::after { content: " 🏆"; }
+  .note { color: var(--dim); font-size: 12.5px; text-wrap: pretty; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Метеоритный дождь</div>
+    <h1>Проверка <span>розыгрыша</span></h1>
+    <p class="lead">Страница заново считает розыгрыш по опубликованной записи: состав, публичное случайное число drand и сам матч. Если хоть что-то подменено, проверка это покажет.</p>
+  </header>
+
+  <section class="card">
+    <h2>Запись розыгрыша</h2>
+    <textarea id="src" placeholder='Вставьте запись розыгрыша (JSON), которую опубликовал стример: { "draw": 57, "roster": [...], ... }' spellcheck="false"></textarea>
+    <div class="row">
+      <button id="go" type="button">Проверить</button>
+      <label class="file">или открыть файл<input id="file" type="file" accept=".json,.jsonl,application/json"></label>
+    </div>
+  </section>
+
+  <div id="out" hidden>
+    <div class="wrap">
+      <div id="verdict" class="verdict"></div>
+      <section class="card">
+        <h2>Шаги проверки</h2>
+        <ol class="steps" id="steps"></ol>
+      </section>
+      <section class="card">
+        <h2>Розыгрыш</h2>
+        <dl class="facts" id="facts"></dl>
+        <div class="winners" id="winners"></div>
+      </section>
+      <section class="card">
+        <h2>Участники</h2>
+        <input id="find" placeholder="Найти себя: ник или id" autocomplete="off">
+        <div class="sub" id="found"></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Ник</th><th>Остров</th><th>Ключ</th></tr></thead><tbody id="roster"></tbody></table></div>
+        <p class="note">В хэш состава входят только ключи (платформа и числовой id аккаунта) и острова. Смена ника на проверку не влияет, а лишний или пропавший участник её ломает.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { runMatch } from './js/core.js';
+import { RULE, DRAND, canonRoster, rosterHash, drawSeed, roundTime, fetchRound, sha256hex } from './js/draw.js';
+
+const $ = id => document.getElementById(id);
+const ISL = ['', 'остров 1', 'остров 2', 'остров 3'];
+const short = h => h ? `${h.slice(0, 4)}…${h.slice(-4)}`.toUpperCase() : '—';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/* Журнал хоста — по строке на событие; склеиваем строки одного розыгрыша.
+   Если в файле их несколько, берём последний. */
+function parse(text) {
+  text = text.trim();
+  try { const j = JSON.parse(text); return j.record || j; } catch {}
+  const recs = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const r = JSON.parse(line);
+    recs.set(r.draw, { ...(recs.get(r.draw) || {}), ...r });
+  }
+  if (!recs.size) throw new Error('пусто');
+  return [...recs.values()].pop();
+}
+
+let current = null;
+
+async function check(rec) {
+  const steps = [];
+  const list = $('steps');
+  $('out').hidden = false;
+  list.innerHTML = '';
+  const add = (title) => {
+    const li = document.createElement('li');
+    li.className = 's-run';
+    li.innerHTML = `<span class="mark">…</span><span class="step-t">${esc(title)}</span><span class="step-d"></span>`;
+    list.appendChild(li);
+    const st = { li, state: 'run' };
+    steps.push(st);
+    return (state, html) => {
+      st.state = state;
+      li.className = 's-' + state;
+      li.querySelector('.mark').textContent = state === 'ok' ? '✓' : state === 'bad' ? '✕' : '!';
+      li.querySelector('.step-d').innerHTML = html;
+    };
+  };
+
+  if (!rec || !Array.isArray(rec.roster) || !(rec.draw > 0)) throw new Error('это не запись розыгрыша');
+  const roster = canonRoster(rec.roster);
+  current = { rec, roster };
+  renderFacts(rec);
+  renderRoster();
+
+  // 1. Правило и ядро
+  let s = add('Версия правил и ядра');
+  if (rec.rule && rec.rule !== RULE) s('bad', `Запись сделана по правилу <code>${esc(rec.rule)}</code>, страница знает <code>${RULE}</code>.`);
+  else {
+    const src = await (await fetch('./js/core.js', { cache: 'no-store' })).text();
+    const mine = await sha256hex(src.replace(/\r\n/g, '\n'));
+    if (!rec.core) s('warn', 'В записи нет версии ядра — сравнить не с чем.');
+    else if (mine === rec.core) s('ok', `Ядро совпадает: <code>${short(mine)}</code>.`);
+    else s('bad', `Розыгрыш шёл на ядре <code>${short(rec.core)}</code>, а страница — на <code>${short(mine)}</code>. Откройте проверку той версии, на которой шёл розыгрыш: другое ядро даст другой исход при том же сиде.`);
+  }
+
+  // 2. Состав
+  s = add('Состав зафиксирован');
+  const hash = await rosterHash(roster);
+  if (hash === rec.rosterHash) s('ok', `Хэш ${roster.length} участников — <code>${short(hash)}</code>. Сверьте его с плашкой «набор закрыт» на записи стрима: она появилась до того, как стала известна случайность.`);
+  else s('bad', `Состав в записи даёт хэш <code>${short(hash)}</code>, а заявлен <code>${short(rec.rosterHash)}</code>: участников добавили, убрали или пересадили.`);
+
+  // 3. Случайность
+  s = add('Случайность drand');
+  const dr = rec.drand;
+  if (!dr || !dr.round) s('warn', 'Розыгрыш без drand: случайность сгенерировал хост, проверить её нельзя. Так бывает только вне режима розыгрыша.');
+  else {
+    const late = rec.closedAt && roundTime(dr.round) <= Date.parse(rec.closedAt);
+    try {
+      const got = await fetchRound(dr.round);
+      if (got.randomness !== rec.randomness) s('bad', `Раунд ${dr.round} у drand — <code>${short(got.randomness)}</code>, а в записи — <code>${short(rec.randomness)}</code>.`);
+      else if (late) s('bad', `Раунд ${dr.round} вышел раньше, чем закрылся набор: его значение могли знать заранее.`);
+      else s('ok', `Раунд <code>${dr.round}</code> получен страницей напрямую у drand: <code>${short(got.randomness)}</code>. Он вышел ${fmtTime(roundTime(dr.round))}, уже после закрытия набора (${fmtTime(Date.parse(rec.closedAt))}).`);
+    } catch (e) {
+      s('warn', `Не удалось достучаться до drand (${esc(e.message)}). Проверьте раунд ${dr.round} вручную: <code>${DRAND.mirrors[0]}/${DRAND.chain}/public/${dr.round}</code>.`);
+    }
+  }
+
+  // 4. Сид
+  s = add('Сид получен по правилу');
+  const { seed, seedHex } = await drawSeed({ draw: rec.draw, layout: rec.layout, winners: rec.winners, rosterHash: hash, randomness: rec.randomness });
+  if (seedHex === rec.seed) s('ok', `<code>sha256(${RULE} | #${rec.draw} | ${rec.layout} | ${rec.winners} | состав | drand)</code> = <code>${short(seedHex)}</code>.`);
+  else s('bad', `По правилу выходит <code>${short(seedHex)}</code>, а в записи <code>${short(rec.seed)}</code>.`);
+
+  // 5. Матч
+  s = add('Матч пересчитан');
+  await new Promise(r => setTimeout(r, 0));
+  const t0 = performance.now();
+  const { game, steps: n } = runMatch({ layout: rec.layout, seed, winners: rec.winners, roster });
+  const mine = game.winners.map(p => [p.key, p.name]);
+  current.winners = new Set(mine.map(w => w[0]));
+  renderRoster();
+  const claimed = rec.result && rec.result.winners;
+  const same = claimed && JSON.stringify(mine.map(w => w[0])) === JSON.stringify(claimed.map(w => w[0]));
+  const who = mine.map(w => `<b>${esc(w[1])}</b>`).join(', ');
+  if (!claimed) s('warn', `Матч в записи не завершён (статус «${esc(rec.status || '?')}»). По сиду победили бы: ${who}.`);
+  else if (same) s('ok', `Тот же матч, ${n} шагов, ${((performance.now() - t0) / 1000).toFixed(1)} с счёта. Победители совпадают: ${who}.`);
+  else s('bad', `По сиду победили ${who}, а объявлены ${claimed.map(w => `<b>${esc(w[1])}</b>`).join(', ')}.`);
+
+  // 6. Статус
+  s = add('Статус в журнале');
+  if (rec.status === 'completed') s('ok', 'Розыгрыш завершён и записан в журнал.');
+  else if (rec.status === 'annulled') s('warn', `Розыгрыш аннулирован: ${esc(rec.reason || 'причина не указана')}. Его победители недействительны.`);
+  else s('warn', `Статус «${esc(rec.status || '?')}»: розыгрыш не дошёл до конца.`);
+
+  const bad = steps.some(x => x.state === 'bad'), warn = steps.some(x => x.state === 'warn');
+  const v = $('verdict');
+  v.className = 'verdict ' + (bad ? 'bad' : warn ? 'warn' : 'ok');
+  v.innerHTML = bad
+    ? `<b>Не сходится</b><span>Запись противоречит сама себе или публичной случайности — смотрите шаги с ✕.</span>`
+    : warn
+      ? `<b>Проверено частично</b><span>Подделок не найдено, но часть шагов проверить не удалось — смотрите шаги с «!».</span>`
+      : `<b>Розыгрыш #${rec.draw} честный</b><span>Исход определён только составом и случайностью drand, которую никто не знал до закрытия набора.</span>`;
+}
+
+function fmtTime(ms) { return new Date(ms).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'medium' }); }
+
+function renderFacts(rec) {
+  const rows = [
+    ['Розыгрыш', `#${rec.draw}`],
+    ['Набор закрыт', rec.closedAt ? fmtTime(Date.parse(rec.closedAt)) : '—'],
+    ['Участников', String(rec.roster.length)],
+    ['Победителей', String(rec.winners)],
+    ['Хэш состава', rec.rosterHash || '—'],
+    ['drand раунд', rec.drand && rec.drand.round ? String(rec.drand.round) : '—'],
+    ['Случайность', rec.randomness || '—'],
+    ['Сид', rec.seed || '—'],
+  ];
+  $('facts').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  const w = rec.result && rec.result.winners || [];
+  $('winners').innerHTML = w.map(([k, n], i) => `<span class="winner">${i + 1}. ${esc(n)}<small>${esc(k)}</small></span>`).join('');
+}
+
+function renderRoster() {
+  if (!current) return;
+  const q = $('find').value.trim().toLowerCase();
+  const rows = current.roster.map((p, i) => ({ p, i }));
+  const hits = q ? rows.filter(({ p }) => p[0].toLowerCase().includes(q) || p[1].toLowerCase().includes(q)) : rows;
+  const wins = current.winners || new Set();
+  $('roster').innerHTML = hits.slice(0, 2000).map(({ p, i }) =>
+    `<tr class="${q ? 'hit' : ''} ${wins.has(p[0]) ? 'win' : ''}"><td>${i + 1}</td><td>${esc(p[1])}</td><td>${ISL[p[2]] || p[2]}</td><td class="mono">${esc(p[0])}</td></tr>`).join('');
+  $('found').textContent = !q ? '' : hits.length ? `Найдено: ${hits.length}` : 'Такого участника в составе нет.';
+}
+
+async function run(text) {
+  try { await check(parse(text)); }
+  catch (e) {
+    $('out').hidden = false;
+    $('steps').innerHTML = '';
+    $('verdict').className = 'verdict bad';
+    $('verdict').innerHTML = `<b>Запись не читается</b><span>${esc(e.message)}</span>`;
+  }
+}
+
+$('go').onclick = () => run($('src').value);
+$('find').oninput = renderRoster;
+$('file').onchange = async e => { const f = e.target.files[0]; if (f) { $('src').value = await f.text(); run($('src').value); } };
+
+/* ?draw=N на машине стримера: запись берётся у самого хоста. */
+const qs = new URLSearchParams(location.search);
+if (qs.has('draw') || qs.has('last')) {
+  fetch('/api/draw' + (qs.get('draw') ? `?draw=${encodeURIComponent(qs.get('draw'))}` : ''))
+    .then(r => r.json()).then(j => { if (j.record) { $('src').value = JSON.stringify(j.record); run($('src').value); } })
+    .catch(() => {});
+}
+</script>
