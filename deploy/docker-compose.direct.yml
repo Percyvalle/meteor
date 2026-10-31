@@ -39,6 +39,9 @@ services:
     environment:
       RELAY_DOMAIN: ${RELAY_DOMAIN:?set RELAY_DOMAIN in .env}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      FIGHT_DOMAIN: ${FIGHT_DOMAIN:-fight.cigilvpn.store}
+      FIGHT_ADMIN_USER: ${FIGHT_ADMIN_USER:?set FIGHT_ADMIN_USER in .env}
+      FIGHT_ADMIN_PASSWORD_HASH: ${FIGHT_ADMIN_PASSWORD_HASH:?set FIGHT_ADMIN_PASSWORD_HASH in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data      # сертификаты: без тома их придётся выпускать заново
@@ -46,7 +49,7 @@ services:
     depends_on:
       relay:
         condition: service_healthy
-    networks: [meteor]
+    networks: [meteor, fight-proxy]
 
 volumes:
   relay-data:
@@ -55,3 +58,5 @@ volumes:
 
 networks:
   meteor:
+  fight-proxy:
+    name: fight-proxy

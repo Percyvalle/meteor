@@ -24,3 +24,42 @@
 		format console
 	}
 }
+
+# Fighter is a separate Compose project on the shared proxy network.
+{$FIGHT_DOMAIN} {
+	encode zstd gzip
+
+	# OBS resources are public; the control panel and API require a password.
+	@publicFiles path /overlay.html /points.html /assets/* /js/* /healthz /readyz /auth/twitch/callback
+	@publicEvents {
+		path /events
+		query role=overlay role=points
+	}
+	handle @publicFiles {
+		reverse_proxy fight:7778 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+	handle @publicEvents {
+		reverse_proxy fight:7778 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+	handle {
+		basic_auth {
+			{$FIGHT_ADMIN_USER} {$FIGHT_ADMIN_PASSWORD_HASH}
+		}
+		reverse_proxy fight:7778 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+}
